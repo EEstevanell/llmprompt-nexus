@@ -7,7 +7,8 @@ from typing import Dict, Any
 class OpenAIClient(BaseClient):
     API_URL = "https://api.openai.com/v1/chat/completions"
     RATE_LIMITS = {
-        "gpt-4": {"calls": 200, "period": 60},
+        "gpt-4o": {"calls": 500, "period": 60},
+        "gpt-4o-mini": {"calls": 500, "period": 60},
         "gpt-3.5-turbo": {"calls": 500, "period": 60}
     }
     

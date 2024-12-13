@@ -32,8 +32,14 @@ registry.register("sonar-huge", ModelConfig(
     parameters={"temperature": 0.2}
 ))
 
-registry.register("gpt-4", ModelConfig(
-    name="gpt-4",
+registry.register("gpt-4o", ModelConfig(
+    name="gpt-4o",
+    api="openai",
+    parameters={"temperature": 0.7}
+))
+
+registry.register("gpt-4o-mini", ModelConfig(
+    name="gpt-4o-mini",
     api="openai",
     parameters={"temperature": 0.7}
 ))

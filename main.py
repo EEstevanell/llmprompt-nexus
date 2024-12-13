@@ -16,7 +16,7 @@ async def main():
     input_dir = Path("inputs")
     
     # Select which models to run
-    models_to_run = ["sonar-small", "sonar-huge"]
+    models_to_run = ["gpt-4o-mini", "sonar-small", "sonar-huge"]
     
     for model_id in models_to_run:
         model_config = registry.get_model(model_id)

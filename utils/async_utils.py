@@ -33,7 +33,7 @@ class ProcessingManager:
         
         async with aiohttp.ClientSession() as session:
             for template in templates:
-                column_name = f"GlobalIntention_{template['name']}_{model_config.name}"
+                column_name = f"global_intention_{template['name']}_{model_config.name}"
                 df[column_name] = ""
                 
                 for idx, row in tqdm(df.iterrows(), total=len(df)):
@@ -70,7 +70,7 @@ class ProcessingManager:
                 "model": model_config.name,
                 "messages": [
                     {"role": "system", "content": "Eres un experto lingüista español."},
-                    {"role": "user", "content": f"{template['template']}\n{row['Text']}"}
+                    {"role": "user", "content": f"{template['template']}\n{row['text']}"}
                 ],
                 "temperature": model_config.parameters.get("temperature", 0.7),
                 "max_tokens": model_config.parameters.get("max_tokens", 150),
