@@ -11,6 +11,3 @@ COPY . .
 
 # Set environment variables
 ENV PYTHONPATH=/workspace
-
-# Run command (can be overridden at runtime)
-CMD ["python", "main.py"]
