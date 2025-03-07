@@ -1,119 +1,113 @@
-# Facade Pattern for a simplified interface that hides underlying complexity of the LLM framework
-# Example: A single entry point for all LLM operations
-#   framework = LLMFramework(api_keys)
-#   result = await framework.process_file(file_path, model_config, templates, batch_mode=True)
-
-# src/core/framework.py
-
 import asyncio
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Union
+import pandas as pd
+from typing import Dict, List, Optional
 
-from .factory import ClientFactory, ProcessorFactory
-from ..models.config import ModelConfig
+from src.core.client_factory import ClientFactory
+from src.processors.base_processor import BaseProcessor
+from src.processors.processor_factory import ProcessorFactory
+from src.models.model_config import ModelConfig
+from src.utils.logger import get_logger, VerboseLevel
+
+logger = get_logger(__name__)
 
 class LLMFramework:
-    """Main facade for the LLM framework providing a simplified interface."""
-    
     def __init__(self, api_keys: Dict[str, str]):
-        """Initialize the framework with API keys for various providers.
-        
-        Args:
-            api_keys: Dictionary mapping service names to API keys
-        """
+        self.api_keys = api_keys
         self.client_factory = ClientFactory(api_keys)
-        self.processor_factory = ProcessorFactory(self.client_factory)
-    
+        self.processor_factory = ProcessorFactory()
+        logger.info("LLMFramework initialized")
+
     async def process_file(
         self,
         file_path: Path,
         model_config: ModelConfig,
-        templates: List[Dict],
+        templates: Dict,
         batch_mode: bool = False,
         batch_size: int = 10,
         max_concurrent: int = 5
-    ) -> Path:
-        """Process a file with multiple templates and models.
+    ):
+        """Process a file with the specified model configuration."""
+        logger.info(f"Processing file {file_path} with model {model_config.id}")
+        logger.debug(f"Batch mode: {batch_mode}, batch size: {batch_size}, max concurrent: {max_concurrent}")
         
-        Args:
-            file_path: Path to the input file (TSV format)
-            model_config: Configuration for the model
-            templates: List of templates to apply
-            batch_mode: Whether to use batch processing (when available)
-            batch_size: Number of items to process in each batch
-            max_concurrent: Maximum number of concurrent requests
+        try:
+            # Read the file
+            df = pd.read_csv(file_path, sep='\t')
+            logger.info(f"Read {len(df)} rows from {file_path}")
+
+            # Get appropriate client
+            client = self.client_factory.get_client(model_config.api)
             
-        Returns:
-            Path: Path to the processed output file
-        """
-        processor = self.processor_factory.get_processor(
-            batch_mode=batch_mode, 
-            model_config=model_config
-        )
-        
-        return await processor.process_file(
-            file_path=file_path,
-            templates=templates,
-            model_config=model_config,
-            batch_size=batch_size,
-            max_concurrent=max_concurrent
-        )
-    
-    async def process_text(
-        self,
-        text: str,
-        model_config: ModelConfig,
-        template: Dict[str, str],
-        batch_mode: bool = False
-    ) -> str:
-        """Process a single text input.
-        
-        Args:
-            text: The input text to process
-            model_config: Configuration for the model
-            template: Template to apply
-            batch_mode: Whether to use batch processing
+            # Get appropriate processor
+            processor = self.processor_factory.get_processor(
+                model_config.api, 
+                client, 
+                model_config,
+                templates
+            )
             
-        Returns:
-            str: The processed response
-        """
-        processor = self.processor_factory.get_processor(
-            batch_mode=batch_mode,
-            model_config=model_config
-        )
-        
-        return await processor.process_text(
-            text=text,
-            template=template,
-            model_config=model_config
-        )
-    
-    async def process_batch(
-        self,
-        items: List[str],
-        model_config: ModelConfig,
-        template: Dict[str, str],
-        max_batch_size: int = 5000
-    ) -> List[str]:
-        """Process a batch of items.
-        
-        Args:
-            items: List of text items to process
-            model_config: Configuration for the model
-            template: Template to apply
-            max_batch_size: Maximum batch size
+            if batch_mode:
+                await self._process_batch(processor, df, model_config, batch_size)
+            else:
+                await self._process_sequential(processor, df, model_config, max_concurrent)
+                
+            # Save results
+            output_path = file_path.parent / f"{file_path.stem}_{model_config.id}_results.tsv"
+            df.to_csv(output_path, sep='\t', index=False)
+            logger.info(f"Results saved to {output_path}")
             
-        Returns:
-            List[str]: The processed responses
-        """
-        processor = self.processor_factory.get_processor(
-            batch_mode=True,
-            model_config=model_config
-        )
+            return output_path
+            
+        except Exception as e:
+            logger.error(f"Error processing file {file_path}: {str(e)}")
+            raise
+
+    async def _process_batch(self, processor: BaseProcessor, df: pd.DataFrame, model_config: ModelConfig, batch_size: int):
+        """Process data in batch mode."""
+        rows = df.to_dict('records')
+        total_batches = (len(rows) + batch_size - 1) // batch_size
         
-        return await processor.process_batch(
-            items=items,
-            template=template,
-            model_config=model_config,
-            max_batch_size=max_batch_size
-        )
+        logger.info(f"Processing {len(rows)} rows in {total_batches} batches")
+        
+        for i in range(0, len(rows), batch_size):
+            batch = rows[i:i+batch_size]
+            batch_num = (i // batch_size) + 1
+            logger.debug(f"Processing batch {batch_num}/{total_batches}")
+            
+            try:
+                results = await processor.process_batch(batch)
+                
+                # Update DataFrame with results
+                for j, result in enumerate(results):
+                    idx = i + j
+                    if idx < len(df):
+                        df.at[idx, 'response'] = result.get('response', '')
+                        df.at[idx, 'model'] = model_config.id
+                        
+                logger.debug(f"Completed batch {batch_num}/{total_batches}")
+                
+            except Exception as e:
+                logger.error(f"Error processing batch {batch_num}: {str(e)}")
+                raise
+
+    async def _process_sequential(self, processor: BaseProcessor, df: pd.DataFrame, model_config: ModelConfig, max_concurrent: int):
+        """Process data sequentially or with limited concurrency."""
+        rows = df.to_dict('records')
+        semaphore = asyncio.Semaphore(max_concurrent)
+        
+        logger.info(f"Processing {len(rows)} rows sequentially with max {max_concurrent} concurrent tasks")
+        
+        async def process_row(row, index):
+            async with semaphore:
+                try:
+                    result = await processor.process_item(row)
+                    df.at[index, 'response'] = result.get('response', '')
+                    df.at[index, 'model'] = model_config.id
+                    logger.debug(f"Processed row {index + 1}/{len(rows)}")
+                except Exception as e:
+                    logger.error(f"Error processing row {index}: {str(e)}")
+                    raise
+                
+        tasks = [process_row(row, i) for i, row in enumerate(rows)]
+        await asyncio.gather(*tasks)

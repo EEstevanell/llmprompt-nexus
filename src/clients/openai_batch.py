@@ -8,6 +8,8 @@ import time
 import aiohttp
 from pathlib import Path
 from typing import Dict, Any, Optional, List, Union, Tuple
+import httpx
+import tiktoken
 
 from src.clients.base import BaseClient
 from src.models.registry import registry
@@ -28,6 +30,7 @@ class OpenAIBatchClient(BaseClient):
     # API endpoints
     API_URL_FILES = "https://api.openai.com/v1/files"
     API_URL_BATCH = "https://api.openai.com/v1/batches"
+    API_URL = "https://api.openai.com/v1/chat/completions"
     
     # Status values for batch jobs
     TERMINAL_STATUSES = {"completed", "failed", "expired", "cancelled"}
@@ -35,6 +38,12 @@ class OpenAIBatchClient(BaseClient):
     def __init__(self, api_key: str):
         """Initialize the batch client with API key and rate limiters."""
         super().__init__(api_key)
+        
+        self.headers = {
+            "Authorization": f"Bearer {api_key}",
+            "Content-Type": "application/json"
+        }
+        self.encoding = tiktoken.encoding_for_model("gpt-4")
         
         # Load batch API configuration from registry
         batch_config = registry.get_batch_config("openai")
@@ -75,6 +84,9 @@ class OpenAIBatchClient(BaseClient):
         self.initial_poll_interval = 5
         self.max_poll_interval = 60
         self.poll_backoff_factor = 1.5
+        
+        logger.info(f"Initialized OpenAI batch client (max batch: {self.MAX_REQUESTS_PER_BATCH}, " +
+                   f"max size: {self.MAX_FILE_SIZE_BYTES/1024/1024:.1f}MB)")
     
     def get_rate_limiter(self, model: str) -> RateLimiter:
         """Get the appropriate rate limiter for a model.
@@ -678,83 +690,147 @@ class OpenAIBatchClient(BaseClient):
         
         For single prompts, we use the regular API since batch is not efficient.
         """
-        # Create a session and use the standard API approach
-        async with aiohttp.ClientSession() as session:
-            data = {
-                "messages": [{"role": "user", "content": prompt}]
-            }
+        logger.warning("Using batch client for single request - consider using OpenAIClient instead")
+        try:
+            # Get model config and validate
+            model_config = registry.get_model(model)
+            actual_model_name = model_config.name
             
-            # Apply parameters from kwargs
+            # Check rate limits with token count
+            await self.check_rate_limit(model, prompt)
+            
+            logger.debug(f"Generating response for prompt with {self.estimate_tokens(prompt)} tokens")
+            
+            # Merge parameters
+            request_params = {}
+            if model_config.parameters:
+                request_params.update(model_config.parameters)
             if kwargs:
-                data.update(kwargs)
+                request_params.update(kwargs)
             
-            result = await self.make_request(session, model, data)
+            messages = [{"role": "user", "content": prompt}]
             
-            # Format response similarly to OpenAIClient
-            if "choices" in result and len(result["choices"]) > 0:
-                return {
-                    "response": result["choices"][0]["message"]["content"],
-                    "model": model,
-                    "usage": result.get("usage", {})
-                }
-            return {"error": "No response content", "model": model}
-            
+            async with httpx.AsyncClient() as client:
+                try:
+                    response = await client.post(
+                        self.API_URL,
+                        headers=self.headers,
+                        json={
+                            "model": actual_model_name,
+                            "messages": messages,
+                            **request_params
+                        },
+                        timeout=60.0
+                    )
+                    
+                    if response.status_code != 200:
+                        logger.error(f"OpenAI API error: {response.status_code} - {response.text}")
+                        raise ValueError(f"OpenAI API error: {response.status_code} - {response.text}")
+                    
+                    result = response.json()
+                    return {
+                        "response": result["choices"][0]["message"]["content"],
+                        "model": model,
+                        "usage": result.get("usage", {})
+                    }
+                except Exception as e:
+                    logger.error(f"Error in batch API request: {str(e)}")
+                    raise
+                    
+        except Exception as e:
+            logger.error(f"Error generating response: {str(e)}")
+            raise
+    
     async def generate_batch(self, prompts: List[str], model: str, **kwargs) -> List[Dict[str, Any]]:
         """Implementation of the abstract method from BaseClient.
         
         For batch processing, we create a temporary JSONL file with the requests.
         """
-        # For very small batches (1-2 prompts), use standard API instead
-        if len(prompts) <= 2:
-            results = []
-            for prompt in prompts:
-                result = await self.generate(prompt, model, **kwargs)
-                results.append(result)
-            return results
-        
-        # Create a temporary file for the batch
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.jsonl', delete=False) as f:
-            batch_file = Path(f.name)
-            
-            # Format each prompt as a chat completion request
-            for prompt in prompts:
-                request = {
-                    "messages": [{"role": "user", "content": prompt}]
-                }
-                
-                # Apply parameters from kwargs
-                if kwargs:
-                    for key, value in kwargs.items():
-                        if key != "messages":
-                            request[key] = value
-                
-                f.write(json.dumps(request) + '\n')
-        
         try:
-            # Process the batch
-            result_file = await self.process_batch(
-                file_path=batch_file,
-                model=model
-            )
+            if len(prompts) > self.MAX_REQUESTS_PER_BATCH:
+                raise ValueError(f"Batch size {len(prompts)} exceeds maximum of {self.MAX_REQUESTS_PER_BATCH}")
             
-            # Parse the results
-            results = []
-            with open(result_file, 'r') as f:
-                for line in f:
-                    data = json.loads(line)
-                    results.append({
-                        "response": data["choices"][0]["message"]["content"],
-                        "model": model,
-                        "usage": data.get("usage", {})
-                    })
+            # Get model config
+            model_config = registry.get_model(model)
+            actual_model_name = model_config.name
             
-            # Clean up the result file if it was temporary
-            if result_file.parent.name.startswith('tmp'):
-                os.unlink(result_file)
-                os.rmdir(result_file.parent)
+            # Calculate total tokens for the batch
+            total_tokens = sum(self.estimate_tokens(prompt) for prompt in prompts)
+            await self.check_rate_limit(model, total_tokens)
             
-            return results
-        finally:
-            # Clean up the request file
-            if batch_file.exists():
-                os.unlink(batch_file)
+            logger.info(f"Processing batch of {len(prompts)} prompts ({total_tokens} total tokens)")
+            
+            # Merge parameters
+            request_params = {}
+            if model_config.parameters:
+                request_params.update(model_config.parameters)
+            if kwargs:
+                request_params.update(kwargs)
+            
+            # Prepare messages for each prompt
+            messages_list = [[{"role": "user", "content": prompt}] for prompt in prompts]
+            
+            # Make batched API request
+            async with httpx.AsyncClient() as client:
+                try:
+                    tasks = []
+                    for messages in messages_list:
+                        tasks.append(
+                            client.post(
+                                self.API_URL,
+                                headers=self.headers,
+                                json={
+                                    "model": actual_model_name,
+                                    "messages": messages,
+                                    **request_params
+                                },
+                                timeout=60.0
+                            )
+                        )
+                    
+                    # Execute requests concurrently
+                    responses = await asyncio.gather(*tasks, return_exceptions=True)
+                    
+                    results = []
+                    total_tokens_generated = 0
+                    
+                    for i, response in enumerate(responses):
+                        if isinstance(response, Exception):
+                            logger.error(f"Error in batch request {i}: {str(response)}")
+                            results.append({
+                                "error": str(response),
+                                "model": model
+                            })
+                            continue
+                            
+                        if response.status_code != 200:
+                            error_msg = f"OpenAI API error: {response.status_code} - {response.text}"
+                            logger.error(error_msg)
+                            results.append({
+                                "error": error_msg,
+                                "model": model
+                            })
+                            continue
+                            
+                        result = response.json()
+                        response_text = result["choices"][0]["message"]["content"]
+                        tokens_generated = self.estimate_tokens(response_text)
+                        total_tokens_generated += tokens_generated
+                        
+                        results.append({
+                            "response": response_text,
+                            "model": model,
+                            "usage": result.get("usage", {})
+                        })
+                    
+                    logger.info(f"Batch processing complete: {len(results)} responses generated " +
+                              f"({total_tokens_generated} tokens)")
+                    return results
+                    
+                except Exception as e:
+                    logger.error(f"Error in batch processing: {str(e)}")
+                    raise
+                    
+        except Exception as e:
+            logger.error(f"Failed to process batch: {str(e)}")
+            raise
