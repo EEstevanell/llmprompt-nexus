@@ -1,0 +1,22 @@
+# Perplexity Models Configuration
+provider: perplexity
+models:
+  sonar:
+    name: sonar
+    description: Perplexity's small-sized model.
+    max_tokens: 4096
+    rate_limits:
+      rpm: 60  # Requests per minute
+    parameters:
+      temperature: 0.7
+      top_p: 1.0
+      
+  sonar-pro:
+    name: sonar-pro
+    description: Perplexity's largest and most capable model.
+    max_tokens: 4096
+    rate_limits:
+      rpm: 30  # Requests per minute
+    parameters:
+      temperature: 0.7
+      top_p: 1.0

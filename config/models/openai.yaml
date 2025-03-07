@@ -1,0 +1,60 @@
+# OpenAI Models Configuration
+provider: openai
+models:
+  gpt-4o:
+    name: gpt-4o
+    description: GPT-4o is OpenAI's most advanced model that can understand and process both text and vision inputs.
+    max_tokens: 8192
+    rate_limits:
+      rpm: 10000  # Requests per minute
+      tpm: 450000  # Tokens per minute
+    parameters:
+      temperature: 0.7
+      top_p: 1.0
+      frequency_penalty: 0.0
+      presence_penalty: 0.0
+      
+  gpt-4o-mini:
+    name: gpt-4o-mini
+    description: A more efficient, smaller version of GPT-4o with lower latency.
+    max_tokens: 8192
+    rate_limits:
+      rpm: 12000  # Requests per minute
+      tpm: 600000  # Tokens per minute
+    parameters:
+      temperature: 0.7
+      top_p: 1.0
+      frequency_penalty: 0.0
+      presence_penalty: 0.0
+      
+  gpt-3.5-turbo:
+    name: gpt-3.5-turbo
+    description: Standard GPT-3.5 model optimized for chat at 1/10th the cost of GPT-4o.
+    max_tokens: 4096
+    rate_limits:
+      rpm: 10000  # Requests per minute
+      tpm: 600000  # Tokens per minute
+    parameters:
+      temperature: 0.7
+      top_p: 1.0
+      frequency_penalty: 0.0
+      presence_penalty: 0.0
+      
+# Batch API specific configuration
+batch_api:
+  enabled: true
+  max_requests_per_batch: 50000
+  max_file_size_bytes: 209715200  # 200 MB
+  rate_limits:
+    file_upload: 
+      calls: 30
+      period: 60
+    batch_create:
+      calls: 60
+      period: 60
+    batch_retrieve:
+      calls: 300
+      period: 60
+    file_download:
+      calls: 60
+      period: 60
