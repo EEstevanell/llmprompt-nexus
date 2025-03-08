@@ -16,7 +16,7 @@ def get_template_manager(template_type: str = 'translation') -> TemplateManager:
     Returns:
         TemplateManager with templates from the specified type
     """
-    config_dir = Path(__file__).parent.parent.parent / 'config' / 'templates'
+    config_dir = Path(__file__).parent / 'config' / 'templates'
     type_file = config_dir / f"{template_type}.yaml"
     
     if not type_file.exists():

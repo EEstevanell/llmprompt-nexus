@@ -1,5 +1,5 @@
 """
-UnifiedLLM Framework - A unified interface for interacting with various LLM providers.
+NexusManager - A unified interface for interacting with various LLM providers.
 
 This module provides a high-level framework for working with different Language Model APIs
 through a consistent interface, with support for:
@@ -14,7 +14,7 @@ from pathlib import Path
 import pandas as pd
 from typing import Dict, List, Optional, Any, Union
 
-from llmprompt_nexus.core.client_factory import create_client
+from llmprompt_nexus.clients.client_factory import create_client
 from llmprompt_nexus.processors.base import BaseProcessor
 from llmprompt_nexus.processors.factory import create_processor
 from llmprompt_nexus.models.model_config import ModelConfig

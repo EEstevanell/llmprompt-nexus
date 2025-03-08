@@ -39,7 +39,7 @@ def load_template(template_name: str = None, template_config: Dict[str, Any] = N
         raise ValueError("Either template_name or template_config must be provided")
     
     # Look for template in config files
-    config_dir = Path(__file__).parent.parent.parent / 'config' / 'templates'
+    config_dir = Path(__file__).parent / 'config' / 'templates'
     yaml_file = config_dir / f"{template_name}.yaml"
     
     if not yaml_file.exists():

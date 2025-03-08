@@ -1,29 +1,29 @@
-[build-system]
-requires = ["setuptools>=45", "wheel", "setuptools_scm>=6.2"]
-build-backend = "setuptools.build_meta"
-
-[tool.setuptools_scm]
-write_to = "llmprompt_nexus/_version.py"
-
-[tool.black]
-line-length = 88
-include = '\.pyi?$'
-
-[tool.isort]
-profile = "black"
-multi_line_output = 3
-
-[tool.sphinx]
-project = "LLMPrompt Nexus"
-author = "LLMPromptNexus Contributors"
-copyright = "2023"
-extensions = [
-    "sphinx.ext.autodoc",
-    "sphinx.ext.viewcode",
-    "sphinx.ext.napoleon",
-    "myst_parser",
+[project]
+name = "llmprompt-nexus"
+version = "0.1.0"
+description = "A unified framework for interacting with various LLM providers through a consistent interface with batch processing, templating, and rate limiting."
+authors = [
+    {name = "Ernesto Estevanell",email = "ernestoestevanellv@gmail.com"}
 ]
-source_suffix = {
-    ".rst": "restructuredtext",
-    ".md": "markdown",
-}
+license = {text = "CC-BY-NC-4.0"}
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "aiohttp (==3.9.3)",
+    "pandas (==1.5.3)",
+    "numpy (==1.26.4)",
+    "tqdm (==4.66.2)",
+    "python-dotenv (==1.0.0)",
+    "pyyaml (==6.0.1)"
+]
+
+
+[build-system]
+requires = ["poetry-core>=2.0.0,<3.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.3.5"
+black = "^25.1.0"
+mypy = "^1.15.0"
+
