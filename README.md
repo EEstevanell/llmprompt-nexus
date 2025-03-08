@@ -60,7 +60,7 @@ export PERPLEXITY_API_KEY="your-key"
 
 2. Or provide them during initialization:
 ```python
-llm = UnifiedLLM({
+llm = NexusManager({
     "openai": "your-openai-key",
     "perplexity": "your-perplexity-key"
 })
@@ -68,17 +68,11 @@ llm = UnifiedLLM({
 
 ## 📘 Basic Usage
 
-### Single Operations
+### Using Built-in Templates
 
 ```python
-# Simple text generation
-response = await llm.generate(
-    prompt="Explain quantum computing briefly",
-    model_id="sonar-pro"
-)
-
-# Using templates
-translation = await llm.run_with_model(
+# Simple translation
+result = await llm.run_with_model(
     input_data={
         "text": "Hello world",
         "source_language": "English",
@@ -86,6 +80,65 @@ translation = await llm.run_with_model(
     },
     model_id="sonar-pro",
     template_name="translation"
+)
+
+# Text classification
+result = await llm.run_with_model(
+    input_data={
+        "text": "I love this product!",
+        "categories": ["positive", "negative", "neutral"]
+    },
+    model_id="sonar-pro",
+    template_name="classification"
+)
+```
+
+### Using Custom Templates
+
+Templates can be defined in two ways:
+
+1. Using YAML files:
+
+```yaml
+templates:
+  technical_qa:
+    template: |
+      Context: {context}
+      Question: {question}
+      Provide a technical answer based on the context.
+    description: "Technical Q&A template"
+    system_message: "You are a technical expert."
+    required_variables: ["context", "question"]
+```
+
+2. Using Python dictionaries:
+
+```python
+custom_template = {
+    "template": """
+    Analyze the following {language} code:
+    
+    {code}
+    
+    Provide:
+    - Code quality score (0-10)
+    - Best practices followed
+    - Suggested improvements
+    """,
+    "name": "code_review",  # Optional
+    "description": "Template for code review",  # Optional
+    "system_message": "You are an expert code reviewer.",  # Optional
+    "required_variables": ["language", "code"]  # Optional
+}
+
+# Use the custom template
+result = await llm.run_with_model(
+    input_data={
+        "language": "Python",
+        "code": "def hello(): print('world')"
+    },
+    model_id="sonar-pro",
+    template_config=custom_template  # Pass template directly
 )
 ```
 
@@ -111,27 +164,36 @@ results = await llm.run_batch_with_model(
 
 ## 🎯 Built-in Templates
 
+LLMPromptNexus comes with several built-in templates:
+
 - **Translation**: Convert text between languages
 - **Classification**: Categorize text into predefined groups
 - **Intent Detection**: Identify user intentions from text
 - **Question Answering**: Generate answers based on context
 - **Summarization**: Create concise text summaries
 
-## ⚙️ Custom Templates
+## ⚙️ Template Schema
 
-Create your own templates using YAML:
+Templates follow this schema:
 
 ```yaml
 templates:
-  technical_qa:
-    template: |
-      Context: {context}
-      Question: {question}
-      Provide a technical answer based on the context.
-    description: "Technical Q&A template"
-    system_message: "You are a technical expert."
-    required_variables: ["context", "question"]
+  template_name:
+    template: |  # Required: The actual template text with {variables}
+      Your template content here with {variable1} and {variable2}
+    description: "Template description"  # Optional
+    system_message: "System prompt for the LLM"  # Optional
+    required_variables: ["variable1", "variable2"]  # Optional
 ```
+
+Required fields:
+- `template`: The template text with variables in {braces}
+
+Optional fields:
+- `name`: Template identifier (auto-generated if using dictionary)
+- `description`: Brief description of the template's purpose
+- `system_message`: System prompt for the LLM
+- `required_variables`: List of required variable names
 
 ## 📚 Documentation
 
