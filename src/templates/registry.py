@@ -1,10 +1,7 @@
 """
 Central template registry system for the UnifiedLLM framework.
-
-The template registry provides a centralized location to register,
-discover and manage templates across the framework.
 """
-from typing import Dict, Optional
+from typing import Dict, Optional, List
 from pathlib import Path
 
 from src.templates.base import Template
@@ -19,8 +16,18 @@ class TemplateRegistry:
     Templates are loaded from YAML files in config/templates/.
     """
     
+    # Core template types supported by the framework
+    TEMPLATE_TYPES = [
+        'classification',
+        'intent',
+        'qa',
+        'summarization',
+        'translation'
+    ]
+    
     def __init__(self):
         self.manager = TemplateManager()
+        self._type_managers: Dict[str, TemplateManager] = {}
         
     def load_all_templates(self, config_dir: Optional[Path] = None):
         """Load all templates from the config directory."""
@@ -31,13 +38,44 @@ class TemplateRegistry:
             logger.warning(f"Template config directory {config_dir} does not exist")
             return
             
-        # Load from YAML files
+        # Load all templates into main manager
         self.manager = TemplateManager.from_yaml_dir(config_dir)
         logger.info(f"Loaded {len(self.manager.templates)} templates from {config_dir}")
+        
+        # Load type-specific managers
+        for template_type in self.TEMPLATE_TYPES:
+            type_file = config_dir / f"{template_type}.yaml"
+            if type_file.exists():
+                try:
+                    self._type_managers[template_type] = TemplateManager.from_yaml(type_file)
+                except Exception as e:
+                    logger.error(f"Error loading {template_type} templates: {str(e)}")
     
     def get_template(self, name: str) -> Template:
         """Get a template by name."""
         return self.manager.get_template(name)
+    
+    def get_template_manager(self, template_type: str = 'translation') -> TemplateManager:
+        """
+        Get template manager for specified template type.
+        
+        Args:
+            template_type: Type of templates to load (e.g., 'translation', 'qa')
+            
+        Returns:
+            TemplateManager with templates from the specified type
+        """
+        if template_type not in self.TEMPLATE_TYPES:
+            raise ValueError(f"Unknown template type: {template_type}")
+            
+        if template_type not in self._type_managers:
+            raise ValueError(f"No templates loaded for type: {template_type}")
+            
+        return self._type_managers[template_type]
+    
+    def list_template_types(self) -> List[str]:
+        """List available template types."""
+        return list(self._type_managers.keys())
     
     def register_template(self, template: Template):
         """Register a new template."""

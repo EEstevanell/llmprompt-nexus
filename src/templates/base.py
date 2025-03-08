@@ -24,12 +24,67 @@ class Template:
             required_variables: Optional set of required variables. If not provided,
                              will be extracted from template_text
         """
+        self.validate_template_text(template_text)
         self.template_text = template_text
         self.name = name
         self.description = description
         self.system_message = system_message
         self._required_vars = required_variables or self._extract_variables(template_text)
     
+    @staticmethod
+    def validate_template_text(template_text: str) -> None:
+        """Validate template text format and content."""
+        if not isinstance(template_text, str):
+            raise ValueError("Template text must be a string")
+        if not template_text.strip():
+            raise ValueError("Template text cannot be empty")
+        
+        # Check for basic formatting issues
+        if "{" not in template_text or "}" not in template_text:
+            raise ValueError("Template must contain at least one variable placeholder {var}")
+
+    @staticmethod
+    def validate_template_config(config: Dict[str, Any]) -> None:
+        """
+        Validate a template configuration dictionary.
+        
+        Args:
+            config: Dictionary containing template configuration
+            
+        Raises:
+            ValueError: If configuration is invalid
+        """
+        required_fields = {"template"}
+        optional_fields = {"name", "description", "system_message", "required_variables"}
+        
+        if not isinstance(config, dict):
+            raise ValueError("Template configuration must be a dictionary")
+            
+        # Check for required fields
+        missing_fields = required_fields - set(config.keys())
+        if missing_fields:
+            raise ValueError(f"Missing required fields in template config: {missing_fields}")
+            
+        # Check for unknown fields
+        unknown_fields = set(config.keys()) - (required_fields | optional_fields)
+        if unknown_fields:
+            raise ValueError(f"Unknown fields in template config: {unknown_fields}")
+            
+        # Validate field types
+        if not isinstance(config["template"], str):
+            raise ValueError("Template text must be a string")
+        if "name" in config and not isinstance(config["name"], str):
+            raise ValueError("Template name must be a string")
+        if "description" in config and not isinstance(config["description"], str):
+            raise ValueError("Template description must be a string")
+        if "system_message" in config and not isinstance(config["system_message"], str):
+            raise ValueError("System message must be a string")
+        if "required_variables" in config:
+            if not isinstance(config["required_variables"], (list, set)):
+                raise ValueError("Required variables must be a list or set")
+            if not all(isinstance(v, str) for v in config["required_variables"]):
+                raise ValueError("Required variables must be strings")
+
     def _extract_variables(self, template_text: str) -> Set[str]:
         """Extract variable names from the template text."""
         pattern = r"\{([a-zA-Z0-9_]+)\}"
@@ -42,7 +97,16 @@ class Template:
     
     def validate_variables(self, variables: Dict[str, Any]) -> List[str]:
         """Get list of missing required variables."""
-        return [var for var in self._required_vars if var not in variables]
+        if not isinstance(variables, dict):
+            raise ValueError("Variables must be provided as a dictionary")
+            
+        missing = []
+        for var in self._required_vars:
+            if var not in variables:
+                missing.append(var)
+            elif variables[var] is None:
+                missing.append(var)
+        return missing
     
     def prepare_variables(self, input_data: Dict[str, Any], defaults: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
@@ -90,10 +154,12 @@ class Template:
         Raises:
             ValueError: If required variables are missing
         """
-        missing = self.validate_variables(variables)
-        if missing:
-            raise ValueError(f"Missing required variables: {', '.join(missing)}")
-        return self.template_text.format(**variables)
+        try:
+            return self.template_text.format(**variables)
+        except KeyError as e:
+            raise ValueError(f"Missing required variable: {e}")
+        except Exception as e:
+            raise ValueError(f"Error rendering template: {e}")
     
     def get_messages(self, variables: Dict[str, Any]) -> List[Dict[str, str]]:
         """

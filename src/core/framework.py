@@ -18,10 +18,9 @@ from src.core.client_factory import create_client
 from src.processors.base import BaseProcessor
 from src.processors.factory import create_processor
 from src.models.model_config import ModelConfig
-from src.models.registry import registry
+from src.models.registry import registry as model_registry
+from src.templates import load_template
 from src.utils.logger import get_logger
-from src.templates.base import Template
-from src.templates.defaults import get_template_manager as get_default_template_manager
 
 logger = get_logger(__name__)
 
@@ -40,7 +39,6 @@ class UnifiedLLM:
     def __init__(self, api_keys: Dict[str, str]):
         """Initialize the framework with API keys for different providers."""
         self.api_keys = api_keys
-        self.template_manager = get_default_template_manager()
     
     def get_client(self, api_name: str):
         """Get or create an API client instance."""
@@ -50,7 +48,7 @@ class UnifiedLLM:
     
     async def generate(self, prompt: str, model_id: str, **kwargs) -> Dict[str, Any]:
         """Generate a response using a specific model."""
-        model_config = registry.get_model(model_id)
+        model_config = model_registry.get_model(model_id)
         client = self.get_client(model_config.provider)
         processor = create_processor(client, model_config)
         
@@ -62,7 +60,7 @@ class UnifiedLLM:
     
     async def generate_batch(self, prompts: List[str], model_id: str, **kwargs) -> List[Dict[str, Any]]:
         """Generate responses for multiple prompts in parallel."""
-        model_config = registry.get_model(model_id)
+        model_config = model_registry.get_model(model_id)
         client = self.get_client(model_config.provider)
         processor = create_processor(client, model_config)
         
@@ -73,7 +71,8 @@ class UnifiedLLM:
         self,
         input_data: Union[Dict[str, Any], List[Dict[str, Any]]],
         model_id: str,
-        template: Optional[Template] = None,
+        template_name: Optional[str] = None,
+        template_config: Optional[Dict[str, Any]] = None,
         batch_mode: bool = False,
         global_variables: Optional[Dict[str, Any]] = None
     ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
@@ -83,12 +82,21 @@ class UnifiedLLM:
         Args:
             input_data: Single dictionary or list of dictionaries containing input data
             model_id: The model ID to use for processing
-            template: Optional template to use for formatting the prompt
+            template_name: Optional name of template to load
+            template_config: Optional template configuration dictionary
             batch_mode: Whether to process as a batch (if input_data is a list)
             global_variables: Optional dictionary of variables that apply to all examples
         """
-        model_config = registry.get_model(model_id)
+        model_config = model_registry.get_model(model_id)
         client = self.get_client(model_config.provider)
+        
+        template = None
+        if template_name or template_config:
+            template = load_template(
+                template_name or "custom_template",
+                template_config
+            )
+        
         processor = create_processor(client, model_config, template)
         
         # Handle global variables if provided
@@ -113,7 +121,8 @@ class UnifiedLLM:
         self,
         file_path: Path,
         model_config: ModelConfig,
-        template: Optional[Template] = None,
+        template_name: Optional[str] = None,
+        template_config: Optional[Dict[str, Any]] = None,
         batch_mode: bool = False,
         batch_size: int = 10
     ) -> Path:
@@ -123,7 +132,8 @@ class UnifiedLLM:
         Args:
             file_path: Path to the input TSV file
             model_config: Configuration for the model to use
-            template: Optional template to use for formatting
+            template_name: Optional name of template to load
+            template_config: Optional template configuration dictionary
             batch_mode: Whether to use batch processing
             batch_size: Size of batches when batch_mode is True
         
@@ -132,6 +142,13 @@ class UnifiedLLM:
         """
         logger.info(f"Processing file {file_path} with model {model_config.id}")
         
+        template = None
+        if template_name or template_config:
+            template = load_template(
+                template_name or "custom_template",
+                template_config
+            )
+
         try:
             df = pd.read_csv(file_path, sep='\t')
             if df.empty:
@@ -139,7 +156,7 @@ class UnifiedLLM:
             
             logger.info(f"Read {len(df)} rows from {file_path}")
             
-            client = self.get_client(model_config.api)
+            client = self.get_client(model_config.provider)
             processor = create_processor(client, model_config, template)
             
             if batch_mode:

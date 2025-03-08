@@ -7,156 +7,102 @@ import os
 from typing import Dict, Any
 
 from src.core.framework import UnifiedLLM
-from src.templates.defaults import get_template_manager
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 async def translation_example(framework: UnifiedLLM):
     """Demonstrate translation template usage."""
-    logger.info("\n=== Translation Template Example ===")
-    
-    tm = get_template_manager('translation')
-    
-    text = "The autumn leaves danced in the crisp morning breeze."
+    logger.info("\n=== Translation Example ===")
     input_data = {
-        "text": text,
+        "text": "Hello world",
         "source_language": "English",
         "target_language": "Spanish"
     }
-    
     result = await framework.run_with_model(
         input_data=input_data,
-        model_id="sonar-pro",  # This is now the model name in the config
-        template=tm.get_template('translation')
+        model_id="sonar",
+        template_name="translation"  # Will load from translation.yaml
     )
-    
-    logger.info(f"Original: {text}")
-    logger.info(f"Translation: {result.get('response', 'Error')}")
+    logger.info(f"Translation Result: {result.get('response', 'Error')}")
 
 async def summarization_example(framework: UnifiedLLM):
     """Demonstrate summarization template usage."""
-    logger.info("\n=== Summarization Template Example ===")
-    
-    tm = get_template_manager('summarization')
-    
-    text = """
-    Recent studies in machine learning have shown significant improvements in natural language processing tasks. 
-    Through extensive experimentation with transformer architectures, researchers have demonstrated that 
-    pre-trained language models can achieve state-of-the-art results across multiple benchmarks. 
-    The methodology involved training on large-scale datasets and fine-tuning for specific tasks. 
-    Results indicate a 15% improvement over baseline models, suggesting that this approach could 
-    revolutionize how we approach NLP tasks in production environments.
-    """
-    
+    logger.info("\n=== Summarization Example ===")
     input_data = {
-        "text": text,
-        "length": "brief"
+        "text": """
+        The Python programming language was created by Guido van Rossum and was first released in 1991.
+        It emphasizes code readability with its notable use of significant whitespace. Python features a
+        dynamic type system and automatic memory management and supports multiple programming paradigms.
+        """
     }
-    
     result = await framework.run_with_model(
         input_data=input_data,
-        model_id="sonar-pro",
-        template=tm.get_template('summarization')
+        model_id="sonar",
+        template_name="summarization"  # Will load from summarization.yaml
     )
-    
-    logger.info(f"Original length: {len(text)} characters")
-    logger.info(f"Summary: {result.get('response', 'Error')}")
+    logger.info(f"Summarization Result: {result.get('response', 'Error')}")
 
 async def classification_example(framework: UnifiedLLM):
     """Demonstrate text classification template usage."""
-    logger.info("\n=== Text Classification Template Example ===")
-    
-    tm = get_template_manager('classification')
-    
-    text = """
-    To install the package, run 'pip install unifiedllm' in your terminal. 
-    Make sure you have Python 3.8 or higher installed on your system.
-    """
-    
+    logger.info("\n=== Classification Example ===")
     input_data = {
-        "text": text,
-        "categories": ["Documentation", "Tutorial", "Error Message", "Code Snippet"]
+        "text": "I absolutely loved this product! Best purchase ever.",
+        "categories": ["positive", "negative", "neutral"]
     }
-    
     result = await framework.run_with_model(
         input_data=input_data,
-        model_id="sonar-pro",
-        template=tm.get_template('classification')
+        model_id="sonar",
+        template_name="classification"  # Will load from classification.yaml
     )
-    
-    logger.info(f"Text: {text}")
-    logger.info(f"Classification: {result.get('response', 'Error')}")
+    logger.info(f"Classification Result: {result.get('response', 'Error')}")
 
 async def qa_example(framework: UnifiedLLM):
     """Demonstrate question answering template usage."""
-    logger.info("\n=== Question Answering Template Example ===")
-    
-    tm = get_template_manager('qa')
-    
-    context = """
-    The UnifiedLLM framework provides a standardized interface for working with different 
-    language models. It supports multiple template types including translation, summarization, 
-    sentiment analysis, classification, and question answering. The framework handles API rate 
-    limiting and provides consistent error handling across different model providers.
-    """
-    
+    logger.info("\n=== Q&A Example ===")
     input_data = {
-        "context": context,
-        "question": "What template types does the UnifiedLLM framework support?"
+        "context": """
+        The UnifiedLLM framework provides a consistent interface for working with different
+        Language Model APIs. It supports template-based interactions, rate limiting,
+        batch processing, and multiple providers.
+        """,
+        "question": "What are the main features of the UnifiedLLM framework?"
     }
-    
     result = await framework.run_with_model(
         input_data=input_data,
-        model_id="sonar-pro",
-        template=tm.get_template('qa')
+        model_id="sonar",
+        template_name="qa"  # Will load from qa.yaml
     )
-    
-    logger.info(f"Question: {input_data['question']}")
-    logger.info(f"Answer: {result.get('response', 'Error')}")
+    logger.info(f"Q&A Result: {result.get('response', 'Error')}")
 
 async def intent_example(framework: UnifiedLLM):
     """Demonstrate intent detection template usage."""
-    logger.info("\n=== Intent Detection Template Example ===")
-    
-    tm = get_template_manager('intent')
-    
-    text = "Can you help me translate this document from English to Spanish?"
-    
+    logger.info("\n=== Intent Detection Example ===")
     input_data = {
-        "text": text
+        "text": "Can you help me book a flight to New York?",
+        "possible_intents": ["booking", "information", "support", "other"]
     }
-    
     result = await framework.run_with_model(
         input_data=input_data,
-        model_id="sonar-pro",
-        template=tm.get_template('intent')
+        model_id="sonar",
+        template_name="intent"  # Will load from intent.yaml
     )
-    
-    logger.info(f"Text: {text}")
-    logger.info(f"Intent Analysis: {result.get('response', 'Error')}")
+    logger.info(f"Intent Result: {result.get('response', 'Error')}")
 
 async def main():
     """Run template usage examples."""
-    try:
-        # Initialize framework with API keys
-        api_keys = {
-            "perplexity": os.getenv("PERPLEXITY_API_KEY")  or "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",
-            "openai": os.getenv("OPENAI_API_KEY")
-        }
-        
-        framework = UnifiedLLM(api_keys)
-        
-        # Run examples for each core template type
-        await translation_example(framework)
-        await summarization_example(framework)
-        await classification_example(framework)
-        await qa_example(framework)
-        await intent_example(framework)
-        
-    except Exception as e:
-        logger.error(f"Error running examples: {str(e)}")
-        raise
+    api_keys = {
+        "openai": os.getenv("OPENAI_API_KEY", "your-key-here"),
+        "perplexity": os.getenv("PERPLEXITY_API_KEY", "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")
+    }
+    
+    framework = UnifiedLLM(api_keys)
+    
+    await translation_example(framework)
+    await summarization_example(framework)
+    await classification_example(framework)
+    await qa_example(framework)
+    await intent_example(framework)
 
 if __name__ == "__main__":
     asyncio.run(main())

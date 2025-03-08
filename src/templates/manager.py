@@ -1,7 +1,7 @@
 """
 Template management system for UnifiedLLM framework.
 """
-from typing import Dict, Any, Optional, List, Set, Union
+from typing import Dict, Any, Optional, List, Union
 import os
 import yaml
 from pathlib import Path
@@ -64,54 +64,61 @@ class TemplateManager:
         return template.render(variables)
     
     @classmethod
-    def from_yaml(cls, yaml_path: Union[str, Path]) -> 'TemplateManager':
+    def from_yaml(cls, file_path: Path) -> 'TemplateManager':
         """
-        Create a TemplateManager from a YAML file.
+        Create a TemplateManager instance by loading templates from a YAML file.
         
-        The YAML file should have this structure:
-        ```yaml
-        templates:
-          template_name:
-            template: "Template text with {variables}"
-            description: "Template description"
-            system_message: "Optional system message"
-        ```
-        """
-        with open(yaml_path) as f:
-            data = yaml.safe_load(f)
+        Args:
+            file_path: Path to the YAML file containing template definitions
             
-        if not isinstance(data, dict) or 'templates' not in data:
-            raise ValueError("Invalid template YAML file format")
+        Returns:
+            TemplateManager instance with loaded templates
+        """
+        if not file_path.exists():
+            raise FileNotFoundError(f"Template file not found: {file_path}")
+            
+        with open(file_path, 'r') as f:
+            config = yaml.safe_load(f)
+            
+        if not config or 'templates' not in config:
+            raise ValueError(f"Invalid template configuration in {file_path}")
             
         templates = {}
-        for name, config in data['templates'].items():
-            templates[name] = Template(
-                template_text=config['template'],
+        for name, template_config in config['templates'].items():
+            template = Template(
+                template_text=template_config['template'],
                 name=name,
-                description=config.get('description', ''),
-                system_message=config.get('system_message')
+                description=template_config.get('description', ''),
+                system_message=template_config.get('system_message')
             )
+            templates[name] = template
             
         return cls(templates)
-    
+
     @classmethod
-    def from_yaml_dir(cls, dir_path: Union[str, Path]) -> 'TemplateManager':
-        """Create a TemplateManager from a directory of YAML files."""
-        manager = cls()
-        dir_path = Path(dir_path)
+    def from_yaml_dir(cls, dir_path: Path) -> 'TemplateManager':
+        """
+        Create a TemplateManager instance by loading all YAML files in a directory.
         
-        if not dir_path.exists():
-            logger.warning(f"Template directory {dir_path} does not exist")
-            return manager
+        Args:
+            dir_path: Path to directory containing template YAML files
             
-        for yaml_file in dir_path.glob('*.yaml'):
+        Returns:
+            TemplateManager instance with all templates loaded from the directory
+        """
+        if not dir_path.exists():
+            raise FileNotFoundError(f"Template directory not found: {dir_path}")
+            
+        templates = {}
+        for file_path in dir_path.glob('*.yaml'):
             try:
-                other_manager = cls.from_yaml(yaml_file)
-                manager.register_templates(other_manager.templates)
+                manager = cls.from_yaml(file_path)
+                templates.update(manager.templates)
             except Exception as e:
-                logger.error(f"Error loading templates from {yaml_file}: {str(e)}")
+                logger.warning(f"Error loading templates from {file_path}: {str(e)}")
+                continue
                 
-        return manager
+        return cls(templates)
 
 # Default instance for common use
 template_manager = TemplateManager()
