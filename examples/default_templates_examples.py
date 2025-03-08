@@ -6,7 +6,7 @@ import asyncio
 import os
 from typing import Dict, Any
 
-from llmprompt_nexus.core.framework import NexusManager
+from llmprompt_nexus import NexusManager
 from llmprompt_nexus.utils.logger import get_logger
 
 logger = get_logger(__name__)

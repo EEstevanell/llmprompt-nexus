@@ -8,8 +8,8 @@ import os
 from pathlib import Path
 from typing import Dict, List
 
-from llmprompt_nexus.core.framework import NexusManager
-from llmprompt_nexus.templates.defaults import get_template_manager
+from llmprompt_nexus import NexusManager
+from llmprompt_nexus.templates import get_template_manager
 from llmprompt_nexus.templates.manager import TemplateManager
 from llmprompt_nexus.utils.logger import get_logger
 
