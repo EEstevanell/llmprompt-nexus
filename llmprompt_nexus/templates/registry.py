@@ -4,9 +4,9 @@ Central template registry system for the UnifiedLLM framework.
 from typing import Dict, Optional, List
 from pathlib import Path
 
-from src.templates.base import Template
-from src.templates.manager import TemplateManager
-from src.utils.logger import get_logger
+from llmprompt_nexus.templates.base import Template
+from llmprompt_nexus.templates.manager import TemplateManager
+from llmprompt_nexus.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

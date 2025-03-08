@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from collections import deque
 import asyncio
 from typing import Dict, Any
-from src.utils.logger import get_logger
+from llmprompt_nexus.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

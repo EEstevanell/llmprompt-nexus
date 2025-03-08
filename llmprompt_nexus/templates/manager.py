@@ -6,8 +6,8 @@ import os
 import yaml
 from pathlib import Path
 
-from src.templates.base import Template
-from src.utils.logger import get_logger
+from llmprompt_nexus.templates.base import Template
+from llmprompt_nexus.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

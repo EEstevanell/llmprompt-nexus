@@ -14,13 +14,13 @@ from pathlib import Path
 import pandas as pd
 from typing import Dict, List, Optional, Any, Union
 
-from src.core.client_factory import create_client
-from src.processors.base import BaseProcessor
-from src.processors.factory import create_processor
-from src.models.model_config import ModelConfig
-from src.models.registry import registry as model_registry
-from src.templates import load_template
-from src.utils.logger import get_logger
+from llmprompt_nexus.core.client_factory import create_client
+from llmprompt_nexus.processors.base import BaseProcessor
+from llmprompt_nexus.processors.factory import create_processor
+from llmprompt_nexus.models.model_config import ModelConfig
+from llmprompt_nexus.models.registry import registry as model_registry
+from llmprompt_nexus.templates import load_template
+from llmprompt_nexus.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

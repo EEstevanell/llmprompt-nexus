@@ -8,10 +8,10 @@ import os
 from pathlib import Path
 from typing import Dict, List
 
-from src.core.framework import NexusManager
-from src.templates.defaults import get_template_manager
-from src.templates.manager import TemplateManager
-from src.utils.logger import get_logger
+from llmprompt_nexus.core.framework import NexusManager
+from llmprompt_nexus.templates.defaults import get_template_manager
+from llmprompt_nexus.templates.manager import TemplateManager
+from llmprompt_nexus.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

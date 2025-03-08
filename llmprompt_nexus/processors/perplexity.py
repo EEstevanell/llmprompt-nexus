@@ -1,9 +1,9 @@
 from typing import Dict, List, Any, Optional, Union
-from src.clients.base import BaseClient
-from src.models.model_config import ModelConfig
-from src.processors.base import BaseProcessor
-from src.templates.base import Template
-from src.utils.logger import get_logger
+from llmprompt_nexus.clients.base import BaseClient
+from llmprompt_nexus.models.model_config import ModelConfig
+from llmprompt_nexus.processors.base import BaseProcessor
+from llmprompt_nexus.templates.base import Template
+from llmprompt_nexus.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

@@ -4,8 +4,8 @@ import asyncio
 import httpx
 from typing import Dict, List, Any, Optional, Union
 
-from src.clients.base import BaseClient
-from src.utils.logger import get_logger
+from llmprompt_nexus.clients.base import BaseClient
+from llmprompt_nexus.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

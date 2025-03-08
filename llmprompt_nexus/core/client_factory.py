@@ -1,8 +1,8 @@
 from typing import Dict
-from src.clients.base import BaseClient
-from src.clients.openai_client import OpenAIClient
-from src.clients.perplexity_client import PerplexityClient
-from src.utils.logger import get_logger
+from llmprompt_nexus.clients.base import BaseClient
+from llmprompt_nexus.clients.openai_client import OpenAIClient
+from llmprompt_nexus.clients.perplexity_client import PerplexityClient
+from llmprompt_nexus.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

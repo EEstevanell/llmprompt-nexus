@@ -4,8 +4,8 @@ import yaml
 from typing import Dict, Optional, Any
 from pathlib import Path
 
-from src.models.config import ModelConfig
-from src.utils.logger import get_logger
+from llmprompt_nexus.models.config import ModelConfig
+from llmprompt_nexus.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

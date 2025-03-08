@@ -6,8 +6,8 @@ import asyncio
 import os
 from pathlib import Path
 
-from src.core.framework import NexusManager
-from src.utils.logger import get_logger
+from llmprompt_nexus.core.framework import NexusManager
+from llmprompt_nexus.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

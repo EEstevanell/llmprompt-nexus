@@ -1,8 +1,8 @@
 """
 Intention-based templates for the UnifiedLLM framework.
 """
-from src.templates.base import Template
-from src.templates.manager import TemplateManager
+from llmprompt_nexus.templates.base import Template
+from llmprompt_nexus.templates.manager import TemplateManager
 
 # Create standard intention templates
 global_intent_template = Template(

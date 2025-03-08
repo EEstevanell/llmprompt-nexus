@@ -12,8 +12,7 @@ setup(
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/EEstevanell/llmprompt-nexus",
-    packages=find_packages(where="src"),
-    package_dir={"": "src"},
+    packages=find_packages(exclude=["tests", "examples", "experiments"]),
     classifiers=[
         "Development Status :: 3 - Alpha",
         "Intended Audience :: Developers",
@@ -40,6 +39,9 @@ setup(
             "black>=22.0",
             "isort>=5.0",
             "flake8>=4.0",
+            "sphinx>=4.0.0",
+            "sphinx-rtd-theme>=1.0.0",
+            "myst-parser>=0.18.0",
         ],
     },
 )

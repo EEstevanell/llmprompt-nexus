@@ -3,6 +3,6 @@ include README.md
 include pyproject.toml
 recursive-include config *.yaml
 recursive-include requirements *.txt
-recursive-include src *.py
+recursive-include llmprompt_nexus *.py
 recursive-exclude * __pycache__
 recursive-exclude * *.py[cod]

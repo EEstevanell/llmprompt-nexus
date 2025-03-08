@@ -1,11 +1,11 @@
 from typing import Dict, Optional
-from src.processors.base import BaseProcessor
-from src.processors.openai import OpenAIProcessor
-from src.processors.perplexity import PerplexityProcessor
-from src.clients.base import BaseClient
-from src.models.model_config import ModelConfig
-from src.templates.base import Template
-from src.utils.logger import get_logger
+from llmprompt_nexus.processors.base import BaseProcessor
+from llmprompt_nexus.processors.openai import OpenAIProcessor
+from llmprompt_nexus.processors.perplexity import PerplexityProcessor
+from llmprompt_nexus.clients.base import BaseClient
+from llmprompt_nexus.models.model_config import ModelConfig
+from llmprompt_nexus.templates.base import Template
+from llmprompt_nexus.utils.logger import get_logger
 
 logger = get_logger(__name__)
 

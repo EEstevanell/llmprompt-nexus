@@ -2,10 +2,10 @@ from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Optional, Protocol, Union
 import asyncio
 
-from src.templates.base import Template
-from src.utils.logger import get_logger
-from src.clients.base import BaseClient
-from src.models.model_config import ModelConfig
+from llmprompt_nexus.templates.base import Template
+from llmprompt_nexus.utils.logger import get_logger
+from llmprompt_nexus.clients.base import BaseClient
+from llmprompt_nexus.models.model_config import ModelConfig
 
 logger = get_logger(__name__)
 

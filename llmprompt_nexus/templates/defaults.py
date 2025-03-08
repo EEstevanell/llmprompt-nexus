@@ -4,7 +4,7 @@ Default template configuration for UnifiedLLM framework.
 from pathlib import Path
 from typing import Dict, Any, Optional
 
-from src.templates.manager import TemplateManager
+from llmprompt_nexus.templates.manager import TemplateManager
 
 def get_template_manager(template_type: str = 'translation') -> TemplateManager:
     """

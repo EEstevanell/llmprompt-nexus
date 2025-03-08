@@ -3,9 +3,9 @@ from typing import Dict, List, Any, Optional
 import asyncio
 import httpx
 
-from src.models.registry import registry
-from src.rate_limiting.limiter import RateLimiter
-from src.utils.logger import get_logger
+from llmprompt_nexus.models.registry import registry
+from llmprompt_nexus.rate_limiting.limiter import RateLimiter
+from llmprompt_nexus.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
