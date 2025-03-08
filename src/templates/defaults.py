@@ -1,98 +1,52 @@
-# src/templates/translation.py
 """
-Translation templates for the UnifiedLLM framework.
+Default template configuration for UnifiedLLM framework.
 """
-from typing import Dict
+from typing import Dict, Any
 
-from src.templates.base import Template, TranslationTemplateStrategy
+from src.templates.registry import registry
 from src.templates.manager import TemplateManager
+from src.templates.base import TemplateStrategy
 
-# Create standard translation templates
-translation_template = Template(
-    template_text="""
-    Please translate the following text:
-    
-    Original text ({source_lang}):
-    {text}
-    
-    Translate to {target_lang} while maintaining the original meaning, tone, and style.
-    Please ensure proper grammar and natural expression in the target language.
-    
-    Guidelines:
-    - Maintain any technical terminology accurately
-    - Preserve formatting and structure
-    - Keep named entities unchanged unless there's a widely accepted translation
-    - Handle idiomatic expressions appropriately for the target culture
-    """,
-    name="translate",
-    description="Standard template for text translation between languages"
-)
+# Core template types supported by the framework
+TEMPLATE_TYPES = [
+    'sentiment',
+    'classification',
+    'intent',
+    'qa',
+    'summarization',
+    'translation'
+]
 
-default_template = Template(
-    template_text="""
-    Please answer the following question:
-    {question}
-    """,
-    name="default",
-    description="Default template for general queries"
-)
-
-summarize_template = Template(
-    template_text="""
-    Please summarize the following text:
-    {text}
-    """,
-    name="summarize",
-    description="Template for text summarization"
-)
-
-sentiment_template = Template(
-    template_text="""
-    Analyze the sentiment of the following text:
-    {text}
-    
-    Please classify it as positive, negative, or neutral and explain why.
-    """,
-    name="sentiment",
-    description="Template for sentiment analysis of text"
-)
-
-# Create a template manager specifically for translation tasks
-default_manager = TemplateManager()
-default_manager.register_template(translation_template)
-default_manager.register_template(default_template)
-default_manager.register_template(summarize_template)
-default_manager.register_template(sentiment_template)
-
-# Set the default strategy to TranslationTemplateStrategy
-default_manager.default_strategy = TranslationTemplateStrategy()
-
-# Legacy dictionary for backward compatibility
-templates = {
-    "default": default_template.template_text,
-    "summarize": summarize_template.template_text,
-    "sentiment": sentiment_template.template_text,
-    "translate": translation_template.template_text
-}
-
-def get_template_manager() -> TemplateManager:
+def get_template_manager(template_type: str = 'translation') -> TemplateManager:
     """
-    Get the translation template manager with predefined translation templates.
+    Get a template manager for a specific template type.
     
+    Args:
+        template_type: One of the supported template types
+        
     Returns:
-        TemplateManager instance with translation templates
+        TemplateManager instance for the specified type
+        
+    Raises:
+        ValueError: If template type is not supported
     """
-    return default_manager
+    if template_type not in TEMPLATE_TYPES:
+        raise ValueError(f"Unsupported template type: {template_type}. Must be one of: {TEMPLATE_TYPES}")
+        
+    domain_manager = registry.get_domain(template_type)
+    return domain_manager
 
-def render_template(template_name: str, variables: Dict) -> str:
+def render_template(template_name: str, variables: Dict[str, Any], template_type: str = 'translation') -> str:
     """
-    Render a translation template with the provided variables.
+    Render a template with the given variables.
     
     Args:
         template_name: Name of the template to render
-        variables: Dictionary of variables for the template
-    
+        variables: Dictionary of variables for template rendering
+        template_type: Type of template to use
+        
     Returns:
-        Rendered template text
+        Rendered template string
     """
-    return default_manager.render_template(template_name, variables)
+    manager = get_template_manager(template_type)
+    return manager.render_template(template_name, variables)

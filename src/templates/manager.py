@@ -1,7 +1,7 @@
 """
 Template management system for UnifiedLLM framework.
 """
-from typing import Dict, Any, Optional, List, Set, Type
+from typing import Dict, Any, Optional, List, Set, Type, Union
 import os
 import yaml
 from pathlib import Path
@@ -76,25 +76,26 @@ class TemplateManager:
         """
         return list(self.templates.keys())
     
-    def render_template(self, name: str, variables: Dict[str, Any]) -> str:
+    def render_template(self, name: str, variables: Dict[str, Any], include_system: bool = True) -> Union[str, List[Dict[str, str]]]:
         """
         Render a template by name with the provided variables.
         
         Args:
             name: Name of the template to render
             variables: Dictionary of variable values
+            include_system: If True, returns messages list with system message if present
             
         Returns:
-            Rendered template text
-            
-        Raises:
-            ValueError: If template is not found or variables are missing
+            Either rendered template text or list of messages if include_system=True
         """
         template = self.get_template(name)
+        if include_system and template.system_message is not None:
+            return template.get_messages(variables)
         return template.render(variables)
     
     def apply_template(self, input_data: Dict[str, Any], 
-                     strategy: Optional[TemplateStrategy] = None) -> str:
+                     strategy: Optional[TemplateStrategy] = None,
+                     include_system: bool = True) -> Union[str, List[Dict[str, str]]]:
         """
         Apply a template using a strategy.
         
@@ -104,12 +105,10 @@ class TemplateManager:
         Args:
             input_data: Input data containing intention/task and variables
             strategy: Strategy to use for template selection and variable mapping
+            include_system: If True, returns messages list with system message if present
             
         Returns:
-            Rendered template text
-            
-        Raises:
-            ValueError: If appropriate template cannot be found or rendered
+            Either rendered template text or list of messages if include_system=True
         """
         strategy = strategy or self.default_strategy
         
@@ -120,20 +119,34 @@ class TemplateManager:
         variables = strategy.prepare_variables(input_data, template)
         
         # Render the template
+        if include_system and template.system_message is not None:
+            return template.get_messages(variables)
         return template.render(variables)
     
-    def load_from_dict(self, template_dict: Dict[str, str]) -> None:
+    def load_from_dict(self, template_dict: Dict[str, Any]) -> None:
         """
-        Load templates from a simple dict of name -> template_text.
+        Load templates from a dictionary that may include system messages.
         
         Args:
-            template_dict: Dictionary mapping template name to template text
+            template_dict: Dictionary with template configurations
         """
-        for name, template_text in template_dict.items():
-            self.register_template(Template(
-                template_text=template_text,
-                name=name
-            ))
+        for name, config in template_dict.items():
+            if isinstance(config, str):
+                # Simple string template
+                self.register_template(Template(
+                    template_text=config,
+                    name=name
+                ))
+            elif isinstance(config, dict):
+                # Template with metadata
+                self.register_template(Template(
+                    template_text=config['template'],
+                    name=name,
+                    description=config.get('description', ''),
+                    system_message=config.get('system_message')
+                ))
+            else:
+                logger.warning(f"Skipping invalid template config for {name}")
     
     def load_from_yaml(self, file_path: str) -> None:
         """
@@ -142,12 +155,13 @@ class TemplateManager:
         Expected YAML format:
         ```yaml
         templates:
-          template_name:
-            template: "Template text with {placeholder}"
-            description: "Template description"
-          another_template:
-            template: "Another template with {different_placeholder}"
-            description: "Another description"
+          translation:
+            template: "Translate this text: {text}"
+            description: "Basic translation template"
+            system_message: "You are an expert translator."
+          summarize:
+            template: "Summarize this text: {text}"
+            system_message: "You are an expert at summarizing content."
         ```
         
         Args:
@@ -161,15 +175,23 @@ class TemplateManager:
                 raise ValueError(f"YAML file {file_path} does not contain 'templates' section")
             
             for name, template_data in data['templates'].items():
-                template_text = template_data.get('template')
-                if not template_text:
-                    logger.warning(f"Skipping template '{name}' without template text")
-                    continue
+                if isinstance(template_data, str):
+                    template_text = template_data
+                    system_message = None
+                    description = ''
+                else:
+                    template_text = template_data.get('template')
+                    if not template_text:
+                        logger.warning(f"Skipping template '{name}' without template text")
+                        continue
+                    system_message = template_data.get('system_message')
+                    description = template_data.get('description', '')
                 
                 self.register_template(Template(
                     template_text=template_text,
                     name=name,
-                    description=template_data.get('description', '')
+                    description=description,
+                    system_message=system_message
                 ))
                 
             logger.info(f"Loaded {len(data['templates'])} templates from {file_path}")
@@ -189,10 +211,14 @@ class TemplateManager:
             data = {'templates': {}}
             
             for name, template in self.templates.items():
-                data['templates'][name] = {
+                template_data = {
                     'template': template.template_text,
                     'description': template.description
                 }
+                if template.system_message:
+                    template_data['system_message'] = template.system_message
+                    
+                data['templates'][name] = template_data
             
             with open(file_path, 'w') as f:
                 yaml.dump(data, f, default_flow_style=False)

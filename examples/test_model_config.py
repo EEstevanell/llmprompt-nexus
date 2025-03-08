@@ -1,90 +1,100 @@
 #!/usr/bin/env python
+"""
+Example script demonstrating how to create and use custom templates with system messages.
+"""
 import asyncio
 import os
 from typing import Dict
 
 from src.core.framework import UnifiedLLM
+from src.templates.manager import TemplateManager
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Example templates for different tasks
-templates = {
-    "summarize": {
-        "template": "Please provide a concise summary of the following text:\n{text}"
+# Example custom templates with system messages
+custom_templates = {
+    "expert_translation": {
+        "template": "Translate the following text from {source_language} to {target_language}:\n\n{text}",
+        "description": "Professional translation template with expert system context",
+        "system_message": "You are an expert translator with deep knowledge of both source and target languages, including cultural nuances and context."
     },
-    "sentiment": {
-        "template": "What is the sentiment of this text? Answer with POSITIVE, NEGATIVE, or NEUTRAL:\n{text}"
+    "technical_qa": {
+        "template": "Based on the following technical documentation, answer the question:\n\nContext:\n{context}\n\nQuestion: {question}",
+        "description": "Technical documentation Q&A template",
+        "system_message": "You are a technical expert who provides clear, accurate, and concise answers based on documentation. Focus on technical accuracy and practical implementation details."
     },
-    "classify": {
-        "template": "Classify this text into one of these categories: TECH, BUSINESS, SCIENCE, OTHER:\n{text}"
-    },
-    "extract": {
-        "template": "Extract key entities (people, organizations, locations) from this text:\n{text}"
+    "academic_summarization": {
+        "template": "Provide a {length} summary of the following academic text:\n\n{text}",
+        "description": "Academic text summarization template",
+        "system_message": "You are an academic researcher skilled in distilling complex academic content into clear summaries while preserving key technical details and maintaining academic rigor."
     }
 }
 
-async def demonstrate_capabilities():
-    # Load API keys from environment
-    api_keys = {
-        "perplexity": os.getenv("PERPLEXITY_API_KEY"),
-        "openai": os.getenv("OPENAI_API_KEY")
-    }
-
-    # Initialize framework
-    framework = UnifiedLLM(api_keys)
-
-    # Example texts
-    texts = [
-        "Apple announced its new Vision Pro headset, which will retail for $3499.",
-        "Climate change poses significant risks to coastal communities worldwide.",
-        "The company's stock dropped 5% after disappointing quarterly results.",
-        "The AI conference brought together researchers from MIT, Google, and Stanford."
-    ]
-
-    # Test different tasks with different models
-    models = ["gpt-4", "sonar"]
-    tasks = ["summarize", "sentiment", "classify", "extract"]
-
-    for model_id in models:
-        logger.info(f"\nTesting model: {model_id}")
+async def demonstrate_custom_templates():
+    """Demonstrate usage of custom templates with system messages."""
+    try:
+        # Initialize framework with API keys
+        api_keys = {
+            "perplexity": os.getenv("PERPLEXITY_API_KEY"),
+            "openai": os.getenv("OPENAI_API_KEY")
+        }
         
-        # Single item processing
-        for task, text in zip(tasks, texts):
-            try:
-                result = await framework.run_with_model(
-                    input_data={"text": text},
-                    model_id=model_id,
-                    templates={task: templates[task]}
-                )
-                logger.info(f"\n{task.upper()} TASK:")
-                logger.info(f"Input: {text}")
-                logger.info(f"Output: {result.get('response', '')}")
-            except Exception as e:
-                logger.error(f"Error with {task} task: {str(e)}")
-
-        # Batch processing example
-        try:
-            batch_items = [
-                {"text": text, "task": task}
-                for text, task in zip(texts, tasks)
-            ]
-            
-            results = await framework.run_with_model(
-                input_data=batch_items,
-                model_id=model_id,
-                templates=templates,
-                batch_mode=True
-            )
-            
-            logger.info("\nBATCH PROCESSING RESULTS:")
-            for item, result in zip(batch_items, results):
-                logger.info(f"\nTask: {item['task']}")
-                logger.info(f"Input: {item['text']}")
-                logger.info(f"Output: {result.get('response', '')}")
-                
-        except Exception as e:
-            logger.error(f"Error in batch processing: {str(e)}")
+        framework = UnifiedLLM(api_keys)
+        
+        # Create a template manager and load custom templates
+        tm = TemplateManager()
+        tm.load_from_dict(custom_templates)
+        
+        # Example 1: Expert Translation
+        logger.info("\n=== Expert Translation Example ===")
+        translation_input = {
+            "text": "The implementation requires careful consideration of edge cases and performance implications.",
+            "source_language": "English",
+            "target_language": "Spanish"
+        }
+        result = await framework.run_with_model(
+            input_data=translation_input,
+            model_id="sonar-pro",
+            template=tm.get_template('expert_translation')
+        )
+        logger.info(f"Expert Translation Result: {result.get('response', 'Error')}")
+        
+        # Example 2: Technical Q&A
+        logger.info("\n=== Technical Q&A Example ===")
+        qa_input = {
+            "context": """
+            The rate limiter implements a token bucket algorithm with a configurable bucket size and refill rate.
+            Tokens are consumed for each API request and automatically refilled over time.
+            When the bucket is empty, requests are delayed until enough tokens are available.
+            """,
+            "question": "How does the rate limiter handle requests when the token bucket is empty?"
+        }
+        result = await framework.run_with_model(
+            input_data=qa_input,
+            model_id="sonar-pro",
+            template=tm.get_template('technical_qa')
+        )
+        logger.info(f"Technical Q&A Result: {result.get('response', 'Error')}")
+        
+        # Example 3: Academic Summarization
+        logger.info("\n=== Academic Summarization Example ===")
+        summary_input = {
+            "text": """
+            Recent advances in transformer-based language models have revolutionized natural language processing tasks.
+            Through the implementation of multi-head self-attention mechanisms, these models can capture long-range
+            dependencies and contextual relationships in text data more effectively than traditional recurrent neural
+            networks. The architecture's parallel processing capabilities also enable significant improvements in
+            training efficiency and scalability.
+            """,
+            "length": "concise"
+        }
+        result = await framework.run_with_model(
+            input_data=summary_input,
+            model_id="sonar-pro",
+            template=tm.get_template('academic_summarization')
+        )
+        logger.info(f"Academic Summary Result: {result.get('response', 'Error')}")
 
 if __name__ == "__main__":
-    asyncio.run(demonstrate_capabilities())
+    asyncio.run(demonstrate_custom_templates())

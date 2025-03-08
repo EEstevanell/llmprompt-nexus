@@ -1,0 +1,14 @@
+templates:
+  intent:
+    template: |
+      Detect the intent in the following text:
+      
+      {text}
+      
+      Provide:
+      - Primary intent
+      - Secondary intents (if any)
+      - Confidence score (0-1)
+      - Key intent indicators
+    description: "Core intent detection template"
+    system_message: "You are an expert in understanding user intentions and goals from natural language, capable of identifying both explicit and implicit intents."

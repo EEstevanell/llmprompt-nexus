@@ -2,7 +2,7 @@ import os
 import json
 import asyncio
 import httpx
-from typing import Dict, List, Any, Optional
+from typing import Dict, List, Any, Optional, Union
 
 from src.clients.base import BaseClient
 from src.utils.logger import get_logger
@@ -21,11 +21,24 @@ class OpenAIClient(BaseClient):
             "Content-Type": "application/json"
         }
     
-    async def generate(self, prompt: str, model: str, **kwargs) -> Dict[str, Any]:
-        """Generate a response for a single prompt."""
+    async def generate(self, prompt: Union[str, List[Dict[str, str]]], model: str, **kwargs) -> Dict[str, Any]:
+        """Generate a response for a single prompt.
+        
+        Args:
+            prompt: Either a string prompt or a list of message dictionaries
+            model: The model to use for generation
+            **kwargs: Additional parameters to pass to the API
+        """
         try:
-            # Prepare the messages
-            messages = [{"role": "user", "content": prompt}]
+            # Handle different prompt types
+            if isinstance(prompt, str):
+                messages = []
+                # Add system message if provided
+                if 'system_message' in kwargs:
+                    messages.append({"role": "system", "content": kwargs.pop('system_message')})
+                messages.append({"role": "user", "content": prompt})
+            else:
+                messages = prompt
             
             # Merge parameters
             request_params = {

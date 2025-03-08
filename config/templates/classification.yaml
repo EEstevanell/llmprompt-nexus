@@ -1,0 +1,14 @@
+templates:
+  classification:
+    template: |
+      Classify the following text into one of the given categories:
+      
+      Text: {text}
+      Categories: {categories}
+      
+      Provide:
+      - Selected category
+      - Confidence score (0-1)
+      - Reasoning for classification
+    description: "Core text classification template"
+    system_message: "You are an expert in text classification, capable of accurately categorizing content based on semantic meaning and context."

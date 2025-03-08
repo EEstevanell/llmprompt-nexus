@@ -1,10 +1,11 @@
 from abc import ABC, abstractmethod
-from typing import Dict, List, Any, Optional, Protocol, Callable
+from typing import Dict, List, Any, Optional, Protocol, Union
 import asyncio
 
 from src.templates.base import Template
 from src.utils.logger import get_logger
 from src.clients.base import BaseClient
+from src.models.model_config import ModelConfig
 
 logger = get_logger(__name__)
 
@@ -22,36 +23,82 @@ class BatchVariableProvider(Protocol):
 class BaseProcessor(ABC):
     """Base class for model processors."""
     
-    def __init__(self, client: BaseClient):
+    def __init__(self, client: BaseClient, model_config: ModelConfig, template: Optional[Template] = None):
         self.client = client
+        self.model_config = model_config
+        self.template = template
+        logger.debug(f"Initialized processor for model {model_config.name}")
     
     @abstractmethod
     async def process_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
         """Process a single item."""
         pass
     
-    async def process_batch(self, items: List[Dict[str, Any]], model: str, **kwargs) -> List[Dict[str, Any]]:
-        """Process multiple items in parallel with rate limiting.
+    async def process_batch(self, items: List[Dict[str, Any]], **kwargs) -> List[Dict[str, Any]]:
+        """Process multiple items."""
+        results = []
+        for item in items:
+            result = await self.process_item(item)
+            results.append(result)
+        return results
+
+    def _prepare_prompt(self, item: Dict[str, Any]) -> Union[str, List[Dict[str, str]]]:
+        """Prepare prompt from item and template.
         
-        This implementation leverages the client's built-in parallel processing.
-        Subclasses can override this to provide custom batch processing logic.
+        Args:
+            item: Input data for the prompt
+            
+        Returns:
+            Either a string prompt or a list of message dictionaries
+            
+        Raises:
+            ValueError: If required data is missing
         """
-        if not items:
-            return []
-        
-        # Convert items to prompts
-        prompts = [self._prepare_prompt(item) for item in items]
-        
-        # Use client's parallel batch processing
-        results = await self.client.generate_batch(prompts, model, **kwargs)
-        
-        # Post-process results if needed
-        return [self._post_process_result(result) for result in results]
-    
-    def _prepare_prompt(self, item: Dict[str, Any]) -> str:
-        """Prepare prompt from item. Override in subclasses if needed."""
-        return str(item.get('prompt', ''))
-    
+        if self.template:
+            # If we have a template, use its message formatting
+            messages = []
+            
+            # Add system message if template provides one
+            if self.template.system_message:
+                messages.append({
+                    "role": "system",
+                    "content": self.template.system_message
+                })
+            
+            # Add the rendered template as user message
+            messages.append({
+                "role": "user",
+                "content": self.template.render(item)
+            })
+            
+            return messages
+            
+        elif isinstance(item.get('messages'), list):
+            # Handle pre-formatted messages
+            return item['messages']
+            
+        elif isinstance(item.get('prompt'), str):
+            # Handle raw prompt string
+            messages = []
+            
+            # Add system message if provided in item
+            if 'system_message' in item:
+                messages.append({
+                    "role": "system",
+                    "content": item['system_message']
+                })
+            
+            # Add user message
+            messages.append({
+                    "role": "user",
+                    "content": item['prompt']
+                })
+            
+            return messages
+            
+        else:
+            raise ValueError("Item must contain either 'prompt', 'messages', or use a template")
+
     def _post_process_result(self, result: Dict[str, Any]) -> Dict[str, Any]:
         """Post-process result. Override in subclasses if needed."""
         return result

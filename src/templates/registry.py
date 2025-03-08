@@ -21,8 +21,7 @@ class TemplateRegistry:
     Central registry for templates across the application.
     
     This class provides a unified interface for accessing templates
-    from different domains (translation, intention, etc.), and makes
-    it easier to discover and extend templates.
+    from different domains, supporting both default and user-defined templates.
     """
     
     def __init__(self):
@@ -30,131 +29,55 @@ class TemplateRegistry:
         # Dictionary mapping domain names to TemplateManager instances
         self.domain_managers: Dict[str, TemplateManager] = {}
         
-        # Default templates directory
-        self.templates_dir = os.path.join(os.path.dirname(__file__), "..", "..", "config", "templates")
+        # Default templates directory (inside package)
+        self.default_templates_dir = os.path.join(os.path.dirname(__file__), "..", "..", "config", "templates")
         
-    def register_domain(self, domain: str, manager: TemplateManager) -> None:
+        # User templates directory (in user's config)
+        self.user_templates_dir = os.path.join(os.path.expanduser("~"), ".config", "unifiedllm", "templates")
+        
+    def register_domain(self, domain: str, manager: TemplateManager, is_default: bool = True) -> None:
         """
         Register a template manager for a specific domain.
         
         Args:
             domain: The domain name (e.g., 'translation', 'intention')
             manager: The template manager for this domain
+            is_default: Whether these are default templates
         """
-        logger.info(f"Registering template domain: {domain}")
+        if domain in self.domain_managers and is_default:
+            # Don't override user templates with defaults
+            return
+            
+        logger.info(f"Registering {'default' if is_default else 'user'} template domain: {domain}")
         self.domain_managers[domain] = manager
         
     def get_domain(self, domain: str) -> TemplateManager:
-        """
-        Get the template manager for a specific domain.
-        
-        Args:
-            domain: The domain name
-            
-        Returns:
-            The template manager for the domain
-            
-        Raises:
-            ValueError: If the domain is not registered
-        """
+        """Get template manager for a domain."""
         if domain not in self.domain_managers:
-            raise ValueError(f"Template domain not found: {domain}")
+            raise ValueError(f"Domain not found: {domain}")
         return self.domain_managers[domain]
-    
+        
     def list_domains(self) -> List[str]:
-        """
-        List all registered template domains.
-        
-        Returns:
-            List of domain names
-        """
+        """List all registered domains."""
         return list(self.domain_managers.keys())
-    
-    def get_template(self, domain: str, template_name: str) -> Template:
-        """
-        Get a template from a specific domain.
         
-        Args:
-            domain: The domain name
-            template_name: The template name within the domain
-            
-        Returns:
-            The template object
-            
-        Raises:
-            ValueError: If the domain or template is not found
-        """
-        manager = self.get_domain(domain)
-        return manager.get_template(template_name)
-    
-    def list_templates(self, domain: Optional[str] = None) -> Dict[str, List[str]]:
-        """
-        List all templates, optionally filtered by domain.
+    def load_all_templates(self) -> None:
+        """Load all templates from both default and user directories."""
+        # First load default templates
+        self.load_templates_from_directory(self.default_templates_dir, is_default=True)
         
-        Args:
-            domain: Optional domain to filter by
-            
-        Returns:
-            Dictionary mapping domain names to lists of template names
-        """
-        if domain:
-            return {domain: self.get_domain(domain).list_templates()}
+        # Then load user templates (will override defaults if same domain)
+        if os.path.exists(self.user_templates_dir):
+            self.load_templates_from_directory(self.user_templates_dir, is_default=False)
         
-        return {
-            domain: manager.list_templates()
-            for domain, manager in self.domain_managers.items()
-        }
-    
-    def render_template(self, domain: str, template_name: str, variables: Dict[str, Any]) -> str:
-        """
-        Render a template from a specific domain.
-        
-        Args:
-            domain: The domain name
-            template_name: The template name within the domain
-            variables: Dictionary of variables for template rendering
-            
-        Returns:
-            Rendered template text
-            
-        Raises:
-            ValueError: If the domain or template is not found or variables are missing
-        """
-        manager = self.get_domain(domain)
-        return manager.render_template(template_name, variables)
-    
-    def apply_template(self, domain: str, input_data: Dict[str, Any], 
-                    strategy: Optional[TemplateStrategy] = None) -> str:
-        """
-        Apply a template from a specific domain using a strategy.
-        
-        Args:
-            domain: The domain name
-            input_data: Input data for template selection and rendering
-            strategy: Optional strategy to use (defaults to domain's default strategy)
-            
-        Returns:
-            Rendered template text
-            
-        Raises:
-            ValueError: If the domain is not found or template cannot be applied
-        """
-        manager = self.get_domain(domain)
-        return manager.apply_template(input_data, strategy)
-    
-    def load_templates_from_directory(self, directory: Optional[str] = None) -> None:
+    def load_templates_from_directory(self, directory: str, is_default: bool = True) -> None:
         """
         Load templates from YAML files in a directory.
         
-        This method scans a directory for YAML files and loads them as template domains.
-        The filename (without extension) is used as the domain name.
-        
         Args:
             directory: Directory path to scan for template files
-                      (defaults to config/templates in the project root)
+            is_default: Whether these are default templates
         """
-        directory = directory or self.templates_dir
-        
         try:
             if not os.path.exists(directory):
                 logger.warning(f"Templates directory does not exist: {directory}")
@@ -175,7 +98,7 @@ class TemplateRegistry:
                     manager.load_from_yaml(yaml_file)
                     
                     # Register the domain
-                    self.register_domain(domain, manager)
+                    self.register_domain(domain, manager, is_default=is_default)
                     
                 except Exception as e:
                     logger.error(f"Error loading templates from {yaml_file}: {str(e)}")
@@ -184,57 +107,55 @@ class TemplateRegistry:
                 
         except Exception as e:
             logger.error(f"Error scanning templates directory {directory}: {str(e)}")
-    
-    def save_templates_to_directory(self, directory: Optional[str] = None) -> None:
-        """
-        Save all templates to YAML files in a directory.
+            
+    def get_template(self, domain: str, template_name: str) -> Template:
+        """Get a specific template from a domain."""
+        return self.get_domain(domain).get_template(template_name)
         
-        This method saves each domain's templates to a separate YAML file
-        in the specified directory.
+    def list_templates(self, domain: Optional[str] = None) -> Dict[str, List[str]]:
+        """
+        List available templates, optionally filtered by domain.
         
         Args:
-            directory: Directory path to save template files
-                      (defaults to config/templates in the project root)
+            domain: Optional domain to filter by
+            
+        Returns:
+            Dictionary mapping domain names to lists of template names
         """
-        directory = directory or self.templates_dir
+        if domain:
+            return {domain: self.get_domain(domain).list_templates()}
+            
+        return {
+            domain: manager.list_templates()
+            for domain, manager in self.domain_managers.items()
+        }
         
-        try:
-            # Ensure directory exists
-            os.makedirs(directory, exist_ok=True)
-            
-            for domain, manager in self.domain_managers.items():
-                try:
-                    # Save domain templates to a YAML file
-                    yaml_file = os.path.join(directory, f"{domain}.yaml")
-                    manager.save_to_yaml(yaml_file)
-                    
-                except Exception as e:
-                    logger.error(f"Error saving templates for domain {domain}: {str(e)}")
-                    
-            logger.info(f"Saved templates for {len(self.domain_managers)} domains to {directory}")
-                
-        except Exception as e:
-            logger.error(f"Error saving templates to directory {directory}: {str(e)}")
-    
-    def register_builtin_domains(self) -> None:
+    def create_user_template_dir(self) -> None:
+        """Create user template directory if it doesn't exist."""
+        os.makedirs(self.user_templates_dir, exist_ok=True)
+        
+    def save_user_template(self, domain: str, template: Template) -> None:
         """
-        Register built-in template domains (translation, intention, etc.).
+        Save a user-defined template.
+        
+        Args:
+            domain: Template domain
+            template: Template to save
         """
-        try:
-            # Import built-in domain managers
-            from templates.defaults import get_template_manager
-            from src.templates.intention import get_intention_template_manager
-            
-            # Register domains
-            self.register_domain('translation', get_template_manager())
-            self.register_domain('intention', get_intention_template_manager())
-            
-            logger.info("Registered built-in template domains")
-            
-        except Exception as e:
-            logger.error(f"Error registering built-in template domains: {str(e)}")
+        self.create_user_template_dir()
+        
+        # Get or create domain manager
+        if domain not in self.domain_managers:
+            self.domain_managers[domain] = TemplateManager()
+        manager = self.domain_managers[domain]
+        
+        # Register template
+        manager.register_template(template)
+        
+        # Save to file
+        yaml_file = os.path.join(self.user_templates_dir, f"{domain}.yaml")
+        manager.save_to_yaml(yaml_file)
 
-
-# Create global instance
+# Create global instance and load templates
 registry = TemplateRegistry()
-registry.register_builtin_domains()
+registry.load_all_templates()

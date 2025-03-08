@@ -1,0 +1,10 @@
+templates:
+  translation:
+    template: |
+      Translate the following text from {source_language} to {target_language}:
+      
+      {text}
+      
+      Translation:
+    description: "Core translation template"
+    system_message: "You are an expert translator with deep knowledge of both source and target languages. You excel at preserving meaning, style, and technical accuracy in translations."

@@ -15,8 +15,9 @@ class RateLimit:
 @dataclass
 class ModelConfig:
     """Configuration for a language model."""
-    id: str
     name: str
+    provider: str
+    max_tokens: int
     description: Optional[str] = None
     parameters: Optional[Dict[str, Any]] = None
     rate_limits: Optional[Dict[str, int]] = None  # Rate limits (rpm)

@@ -1,22 +1,19 @@
 # Perplexity Models Configuration
-provider: perplexity
 models:
-  - id: sonar
-    name: sonar-small-online
-    description: "Sonar small online model"
+  - name: sonar
     provider: perplexity
+    description: "Sonar small online model"
+    max_tokens: 1024
     rate_limits:
       rpm: 60
     parameters:
       temperature: 0.7
-      max_tokens: 1024
-
-  - id: sonar-pro
-    name: sonar-medium-online
-    description: "Sonar medium online model"
+      
+  - name: sonar-pro
     provider: perplexity
+    description: "Sonar medium online model"
+    max_tokens: 4096
     rate_limits:
-      rpm: 120
+      rpm: 60
     parameters:
       temperature: 0.7
-      max_tokens: 4096

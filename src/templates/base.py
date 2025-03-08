@@ -13,7 +13,11 @@ class Template:
     rendering the template with provided values.
     """
     
-    def __init__(self, template_text: str, name: str = "unnamed", description: str = ""):
+    def __init__(self, 
+                 template_text: str, 
+                 name: str = "unnamed", 
+                 description: str = "",
+                 system_message: Optional[str] = None):
         """
         Initialize a template with template text and metadata.
         
@@ -21,10 +25,12 @@ class Template:
             template_text: The template text with {placeholder} variables
             name: Name of the template
             description: Description of what the template does
+            system_message: Optional system-level message for LLM APIs
         """
         self.template_text = template_text
         self.name = name
         self.description = description
+        self.system_message = system_message
         self._required_vars = self._extract_variables(template_text)
         
     def _extract_variables(self, template_text: str) -> Set[str]:
@@ -95,12 +101,41 @@ class Template:
         Returns:
             Dictionary with template metadata and text
         """
-        return {
-            "name": self.name,
-            "description": self.description,
+        data = {
             "template": self.template_text,
-            "required_variables": list(self._required_vars)
+            "name": self.name,
+            "description": self.description
         }
+        if self.system_message:
+            data["system_message"] = self.system_message
+        return data
+    
+    def get_messages(self, variables: Dict[str, Any]) -> List[Dict[str, str]]:
+        """
+        Get the template as a list of messages for LLM APIs.
+        
+        Args:
+            variables: Dictionary of variable values
+            
+        Returns:
+            List of message dictionaries with role and content
+        """
+        messages = []
+        
+        # Add system message if present
+        if self.system_message:
+            messages.append({
+                "role": "system",
+                "content": self.system_message
+            })
+            
+        # Add user message with rendered template
+        messages.append({
+            "role": "user",
+            "content": self.render(variables)
+        })
+        
+        return messages
 
 
 class TemplateStrategy(ABC):

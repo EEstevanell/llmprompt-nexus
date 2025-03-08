@@ -15,32 +15,6 @@ from src.templates.defaults import get_template_manager, render_template
 
 logger = get_logger(__name__)
 
-async def process_parallel_batch(framework: UnifiedLLM, batch_texts: List[Dict], model_id: str, 
-                               template: Template, global_vars: Dict[str, Any], 
-                               transform_input: callable, max_concurrent: int = 5) -> List[Dict[str, Any]]:
-    """Process batch items in parallel with rate limiting."""
-    semaphore = asyncio.Semaphore(max_concurrent)
-    results = [None] * len(batch_texts)
-    
-    async def process_item(index: int, item: Dict):
-        async with semaphore:
-            try:
-                result = await framework.process_batch_with_template(
-                    inputs=[item],
-                    model_id=model_id,
-                    template=template,
-                    global_vars=global_vars,
-                    transform_input=transform_input
-                )
-                results[index] = result[0]
-            except Exception as e:
-                logger.error(f"Error processing batch item {index}: {str(e)}")
-                results[index] = {"error": str(e)}
-    
-    tasks = [process_item(i, item) for i, item in enumerate(batch_texts)]
-    await asyncio.gather(*tasks)
-    return results
-
 async def main():
     try:
         # Load API keys from environment variables
@@ -114,20 +88,19 @@ async def main():
             description="Custom translation template with different variable names"
         ))
 
-        # Create batch of texts
+        # Create batch of texts with proper structure
         batch_texts = [{'text': text} for text in texts * 2]  # Multiply texts for demonstration
         
-        # Define a simple transform function
+        # Define transform function to match template variables
         def transform_input(input_dict: Dict) -> Dict:
             """Transform input dictionary to match template variables."""
             return {
                 'input_text': input_dict['text']
             }
         
-        # Process batch in parallel with rate limiting
-        batch_results = await process_parallel_batch(
-            framework=framework,
-            batch_texts=batch_texts,
+        # Process batch using framework's built-in batch processing
+        batch_results = await framework.process_batch_with_template(
+            inputs=batch_texts,
             model_id="sonar-pro",
             template=template_manager.get_template("custom_translate"),
             global_vars={
@@ -136,7 +109,7 @@ async def main():
                 'preserve_style': 'yes'
             },
             transform_input=transform_input,
-            max_concurrent=5  # Adjust based on rate limits
+            batch_size=5  # Adjust based on rate limits
         )
         
         for i, result in enumerate(batch_results):
@@ -161,10 +134,10 @@ async def main():
                             text = f"Hey! Here's what I'd like to translate: {text}"
                         return {'input_text': text}
                     return transform
-                
-                results = await process_parallel_batch(
-                    framework=framework,
-                    batch_texts=batch_texts[:1],
+
+                # Use framework's batch processing for each format
+                results = await framework.process_batch_with_template(
+                    inputs=batch_texts[:1],
                     model_id="sonar-pro",
                     template=template_manager.get_template("custom_translate"),
                     global_vars={
@@ -173,7 +146,7 @@ async def main():
                         'preserve_style': 'yes'
                     },
                     transform_input=make_transform(format_type),
-                    max_concurrent=3
+                    batch_size=3
                 )
                 
                 for i, result in enumerate(results):

@@ -1,0 +1,15 @@
+templates:
+  summarization:
+    template: |
+      Summarize the following text:
+      
+      {text}
+      
+      Length: {length}
+      
+      Provide:
+      - Concise summary
+      - Key points
+      - Important details preserved
+    description: "Core summarization template"
+    system_message: "You are an expert in text summarization, capable of extracting and condensing the most important information while maintaining accuracy and coherence."

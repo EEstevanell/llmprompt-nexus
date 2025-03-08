@@ -1,6 +1,85 @@
 # UnifiedLLM Framework
 
-A flexible framework for interacting with multiple Language Model APIs through a unified interface. This framework provides template-based interactions, rate limiting, and batch processing capabilities across different LLM providers.
+A unified framework for working with different language models through a standardized interface.
+
+## Core Templates
+
+The framework provides six core template types for common NLP tasks:
+
+1. **Translation** (`translation`)
+   - Translates text between languages
+   - Required variables: text, source_language, target_language
+
+3. **Text Classification** (`classification`)
+   - Classifies text into predefined categories
+   - Required variables: text, categories
+
+4. **Intent Detection** (`intent`)
+   - Detects user intentions from text
+   - Required variables: text
+
+5. **Question Answering** (`qa`)
+   - Answers questions based on provided context
+   - Required variables: context, question
+
+6. **Summarization** (`summarization`)
+   - Creates concise summaries of longer texts
+   - Required variables: text, length
+
+## Usage
+
+```python
+from src.templates.defaults import get_template_manager
+
+# Get a template manager for your task
+tm = get_template_manager('translation')
+
+# Prepare your input data
+input_data = {
+    "text": "Hello world",
+    "source_language": "English",
+    "target_language": "Spanish"
+}
+
+# Get the template and use it
+template = tm.get_template('translation')
+result = await framework.run_with_model(
+    input_data=input_data,
+    model_id="your-model",
+    template=template
+)
+```
+
+## Custom Templates
+
+While the framework provides core templates for common tasks, you can create custom templates:
+
+1. Create a YAML file in `~/.config/unifiedllm/templates/`
+2. Define your template following this structure:
+```yaml
+templates:
+  your_template_name:
+    template: |
+      Your template text with {variables}
+    description: "Template description"
+    system_message: "Optional system message for LLM"
+```
+
+## Configuration
+
+Templates are configured in YAML files under `config/templates/`. Each core template type has its own configuration file.
+
+## API Keys
+
+Set your API keys as environment variables:
+```bash
+export OPENAI_API_KEY="your-key"
+export PERPLEXITY_API_KEY="your-key"
+```
+
+## Examples
+
+See `examples/use_templates.py` for complete examples of using each template type.
 
 ## Project Structure
 
