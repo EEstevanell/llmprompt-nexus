@@ -59,16 +59,23 @@ class ModelRegistry:
     
     def _process_models_config(self, provider: str, config_data: Dict[str, Any]) -> None:
         """Process the models section of a configuration file."""
-        for model_data in config_data.get("models", []):
+        models_data = config_data.get("models", {})
+        if not isinstance(models_data, dict):
+            logger.error(f"Models configuration for {provider} must be a dictionary")
+            return
+            
+        for model_id, model_data in models_data.items():
             try:
-                model_id = model_data.get("name")
-                if not model_id:
-                    logger.warning(f"Skipping model without name in {provider} config")
+                if not isinstance(model_data, dict):
+                    logger.warning(f"Skipping invalid model data for {model_id} in {provider} config")
                     continue
-                    
+                
+                # Use model_id from the key if name is not specified
+                name = model_data.get("name", model_id)
+                
                 # Create ModelConfig instance
                 model_config = ModelConfig(
-                    name=model_id,
+                    name=name,
                     provider=provider,
                     description=model_data.get("description", ""),
                     max_tokens=model_data.get("max_tokens", 4096),

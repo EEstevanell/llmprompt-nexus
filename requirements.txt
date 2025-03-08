@@ -1,6 +1,8 @@
 aiohttp==3.9.3
 pandas==1.5.3
+numpy==1.26.4
 tqdm==4.66.2
 python-dotenv==1.0.0
 openai
 pyyaml==6.0.1
+tiktoken

@@ -1,4 +1,4 @@
-from typing import Dict, Optional
+from typing import Dict, Optional, List, Set
 from src.clients.base import BaseClient
 from src.clients.openai_client import OpenAIClient
 from src.clients.perplexity_client import PerplexityClient
@@ -15,6 +15,15 @@ class ClientFactory:
     using the model registry to determine the appropriate client type.
     """
     
+    # Class-level registry of supported providers and their client classes
+    SUPPORTED_PROVIDERS = {
+        "openai": OpenAIClient,
+        "perplexity": PerplexityClient
+    }
+    
+    # Providers that support batch processing
+    BATCH_SUPPORTED_PROVIDERS = {"openai"}
+    
     def __init__(self, api_keys: Dict[str, str]):
         """Initialize the client factory.
         
@@ -23,6 +32,35 @@ class ClientFactory:
         """
         self.api_keys = api_keys
         self.clients = {}
+        self._validate_api_keys()
+        
+    def _validate_api_keys(self) -> None:
+        """Validate that all required API keys are present.
+        
+        Raises:
+            ValueError: If any required API key is missing
+        """
+        # Get available providers from registry
+        available_providers = set(registry.list_providers())
+        
+        # Check if we have API keys for all available providers
+        missing_keys = [provider for provider in available_providers 
+                        if provider not in self.api_keys or not self.api_keys[provider]]
+        
+        if missing_keys:
+            logger.warning(f"Missing API keys for providers: {', '.join(missing_keys)}")
+        
+        # Validate we have at least one valid API key
+        if not any(key for key in self.api_keys.values() if key):
+            raise ValueError("No valid API keys provided")
+            
+    def get_supported_providers(self) -> List[str]:
+        """Get list of providers supported by this factory.
+        
+        Returns:
+            List of provider names that this factory can create clients for
+        """
+        return list(self.SUPPORTED_PROVIDERS.keys())
         
     def get_client_for_model(self, model_id: str, use_batch: bool = False) -> BaseClient:
         """Get the appropriate client for a specific model.
@@ -41,11 +79,19 @@ class ClientFactory:
         model_config = registry.get_model(model_id)
         provider = model_config.provider
         
-        # For OpenAI with batch mode, use the batch client
-        if provider == "openai" and use_batch:
-            batch_config = registry.get_batch_config("openai")
+        # Verify provider is supported
+        if provider not in self.SUPPORTED_PROVIDERS:
+            raise ValueError(f"Provider '{provider}' for model '{model_id}' is not supported. "
+                            f"Supported providers: {', '.join(self.get_supported_providers())}")
+        
+        # For providers with batch mode, check if batch is requested and available
+        if use_batch and provider in self.BATCH_SUPPORTED_PROVIDERS:
+            batch_config = registry.get_batch_config(provider)
             if batch_config and batch_config.enabled:
                 return self.get_client(provider, use_batch=True)
+            else:
+                # Batch requested but not available, log warning and fall back to standard client
+                logger.warning(f"Batch processing requested for {provider} but not available or disabled")
         
         # Get standard client for the provider
         return self.get_client(provider)
@@ -63,6 +109,16 @@ class ClientFactory:
         Raises:
             ValueError: If provider is not supported or API key is missing
         """
+        # Validate provider is supported
+        if provider not in self.SUPPORTED_PROVIDERS:
+            raise ValueError(f"Unsupported provider: {provider}. "
+                            f"Available providers: {', '.join(self.get_supported_providers())}")
+            
+        # Check if batch is requested but not supported
+        if use_batch and provider not in self.BATCH_SUPPORTED_PROVIDERS:
+            logger.warning(f"Batch processing requested for {provider} but not supported, using standard client")
+            use_batch = False
+            
         # Create a cache key that includes batch preference
         cache_key = f"{provider}{'_batch' if use_batch else ''}"
         
@@ -76,20 +132,22 @@ class ClientFactory:
             raise ValueError(f"API key not found for provider: {provider}")
         
         # Create the appropriate client instance
-        if provider == "openai":
-            if use_batch:
-                client = OpenAIBatchClient(api_key)
-                logger.info(f"Created OpenAI Batch client")
-            else:
-                client = OpenAIClient(api_key)
-                logger.info(f"Created OpenAI client")
-        elif provider == "perplexity":
-            client = PerplexityClient(api_key)
-            logger.info(f"Created Perplexity client")
-        else:
-            available_providers = registry.list_providers()
-            raise ValueError(f"Unsupported provider: {provider}. Available providers: {available_providers}")
-        
-        # Cache the client for future use
-        self.clients[cache_key] = client
-        return client
+        try:
+            if provider == "openai":
+                if use_batch:
+                    client = OpenAIBatchClient(api_key)
+                    logger.info("Created OpenAI Batch client")
+                else:
+                    client = OpenAIClient(api_key)
+                    logger.info("Created OpenAI client")
+            elif provider == "perplexity":
+                client = PerplexityClient(api_key)
+                logger.info("Created Perplexity client")
+            
+            # Cache the client for future use
+            self.clients[cache_key] = client
+            return client
+            
+        except Exception as e:
+            logger.error(f"Failed to create client for {provider}: {str(e)}")
+            raise

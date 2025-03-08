@@ -2,29 +2,30 @@ import asyncio
 import yaml
 from pathlib import Path
 import pandas as pd
-from typing import List, Dict
+from typing import List, Dict, Any
 
 from src.core.framework import LLMFramework
-from src.templates.translation import templates
+from templates.defaults import templates as default_templates
 from src.models.registry import registry
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 class TranslationExperiment:
-    def __init__(self, experiment_path: Path, model_id: str = "sonar-small", batch_size: int = 10):
+    def __init__(self, experiment_path: Path, model_id: str, batch_size: int = 10):
         self.experiment_path = experiment_path
         self.model_id = model_id
         self.batch_size = batch_size
-        self.model_config = registry.get_model(model_id)
         
+        # Get model configuration from registry
+        self.model_config = registry.get_model(model_id)
         if not self.model_config:
             raise ValueError(f"Model {model_id} not found in registry")
             
         self.framework = None
         self.config = None
         self.data = None
-
+        
     async def initialize(self, api_keys: Dict[str, str]) -> None:
         """Initialize the experiment with configuration and framework"""
         try:
@@ -50,47 +51,56 @@ class TranslationExperiment:
         except Exception as e:
             logger.error(f"Failed to initialize experiment: {str(e)}")
             raise
-
+            
     async def process_batch(self, texts: List[str], target_lang: str) -> List[str]:
         """Process a batch of texts for translation"""
         try:
             source_lang = self.config['source_language']
             
-            # Prepare template variables for all texts in batch
-            template_vars = {
-                'source_lang': source_lang,
-                'target_lang': target_lang,
-                'text': None  # Will be set per text
-            }
+            # Create a temporary dataframe for batch processing
+            batch_df = pd.DataFrame({'source_text': texts})
             
-            translations = []
-            # Use framework's batch processing if available
-            if hasattr(self.framework, 'process_batch'):
-                batch_results = await self.framework.process_batch(
-                    texts=texts,
-                    model_config=self.model_config,
-                    template_name="translate",
-                    template_vars=template_vars,
-                    batch_size=self.batch_size
-                )
-                translations.extend(batch_results)
-            else:
-                # Fallback to sequential processing
-                for text in texts:
-                    template_vars['text'] = text
-                    result = await self.framework.process_text(
-                        text=text,
-                        model_config=self.model_config,
-                        template_name="translate",
-                        template_vars=template_vars
-                    )
-                    translations.append(result)
+            # Add required fields for template formatting
+            batch_df['source_lang'] = source_lang
+            batch_df['target_lang'] = target_lang
+            batch_df['intention'] = 'translate'  # Use the translate template
+            
+            # Create a temporary file for the batch
+            batch_file = self.experiment_path.parent / f"temp_batch_{self.model_id}.tsv"
+            batch_df.to_csv(batch_file, sep='\t', index=False)
+            
+            # Use the framework to process the file
+            # The framework will handle batch processing internally
+            await self.framework.process_file(
+                file_path=batch_file,
+                model_config=self.model_config,
+                templates=default_templates,
+                batch_mode=True,
+                batch_size=self.batch_size,
+                max_concurrent=5
+            )
+            
+            # Read results back
+            result_file = batch_file.parent / f"{batch_file.stem}_{self.model_id}_results.tsv"
+            if result_file.exists():
+                results_df = pd.read_csv(result_file, sep='\t')
+                translations = results_df['response'].tolist()
+                
+                # Clean up temporary files
+                try:
+                    batch_file.unlink()
+                    result_file.unlink()
+                except Exception as e:
+                    logger.warning(f"Could not delete temporary files: {str(e)}")
                     
-            return translations
+                return translations
+            else:
+                raise FileNotFoundError(f"Results file not found at {result_file}")
+                
         except Exception as e:
             logger.error(f"Error processing batch: {str(e)}")
             raise
-
+            
     async def run(self) -> None:
         """Run the translation experiment"""
         try:
@@ -107,6 +117,7 @@ class TranslationExperiment:
                     batch = self.data.iloc[i:i+self.batch_size]
                     source_texts = batch['source_text'].tolist()
                     
+                    logger.info(f"Processing batch {i//self.batch_size + 1} with {len(source_texts)} texts")
                     translations = await self.process_batch(source_texts, target_lang)
                     
                     # Store results
@@ -115,7 +126,8 @@ class TranslationExperiment:
                             'source_lang': source_lang,
                             'target_lang': target_lang,
                             'source_text': source,
-                            'translation': translation
+                            'translation': translation,
+                            'model': self.model_id
                         })
                         
             # Save results

@@ -1,6 +1,10 @@
 # src/models/config.py
-from dataclasses import dataclass
-from typing import Dict, Any, Optional
+from dataclasses import dataclass, field
+from typing import Dict, Any, Optional, List
+
+from src.utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 @dataclass
 class RateLimit:
@@ -19,6 +23,39 @@ class ModelConfig:
     max_tokens: int = 4096
     rate_limits: Optional[Dict[str, Any]] = None
     parameters: Optional[Dict[str, Any]] = None
+    
+    def __post_init__(self):
+        """Validate configuration after initialization."""
+        self.validate()
+    
+    def validate(self) -> None:
+        """Validate model configuration.
+        
+        Raises:
+            ValueError: If the configuration is invalid
+        """
+        if not self.name:
+            raise ValueError("Model name is required")
+        if not self.provider:
+            raise ValueError("Model provider is required")
+        if self.max_tokens <= 0:
+            raise ValueError(f"Max tokens must be greater than 0, got {self.max_tokens}")
+            
+        # Validate supported providers (can be extended as needed)
+        supported_providers = ["openai", "perplexity"]
+        if self.provider not in supported_providers:
+            logger.warning(f"Provider '{self.provider}' may not be fully supported. "
+                          f"Supported providers: {', '.join(supported_providers)}")
+        
+        # Validate rate limits if present
+        if self.rate_limits:
+            for limit_type, value in self.rate_limits.items():
+                if not isinstance(value, (int, float)) or value <= 0:
+                    raise ValueError(f"Invalid rate limit for {limit_type}: {value}")
+        
+        # Validate parameters if present
+        if self.parameters and not isinstance(self.parameters, dict):
+            raise ValueError(f"Parameters must be a dictionary, got {type(self.parameters)}")
     
     def to_dict(self) -> Dict[str, Any]:
         """Convert config to dictionary."""
@@ -58,3 +95,27 @@ class BatchAPIConfig:
     max_requests_per_batch: int = 50000
     max_file_size_bytes: int = 209715200  # 200 MB
     rate_limits: Optional[Dict[str, Dict[str, int]]] = None
+    
+    def __post_init__(self):
+        """Validate configuration after initialization."""
+        self.validate()
+    
+    def validate(self) -> None:
+        """Validate batch API configuration.
+        
+        Raises:
+            ValueError: If the configuration is invalid
+        """
+        if self.max_requests_per_batch <= 0:
+            raise ValueError(f"Max requests per batch must be positive, got {self.max_requests_per_batch}")
+        if self.max_file_size_bytes <= 0:
+            raise ValueError(f"Max file size must be positive, got {self.max_file_size_bytes}")
+        
+        # Validate rate limits if present
+        if self.rate_limits:
+            for operation, limits in self.rate_limits.items():
+                if not isinstance(limits, dict):
+                    raise ValueError(f"Rate limit for {operation} must be a dictionary")
+                for key, value in limits.items():
+                    if not isinstance(value, (int, float)) or value <= 0:
+                        raise ValueError(f"Invalid rate limit value for {operation}.{key}: {value}")

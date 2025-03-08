@@ -1,17 +1,26 @@
-templates = [
-    {
-        "name": "global", "template": 
-    """
+"""
+Intention-based templates for the UnifiedLLM framework.
+"""
+from src.templates.base import Template, IntentionTemplateStrategy
+from src.templates.manager import TemplateManager
+
+# Create standard intention templates
+global_intent_template = Template(
+    template_text="""
     A partir de ahora vas a clasificar la intención comunicativa global de los mensajes que te voy a enviar.
     La intención del mensaje debe ser una de estas 13 categorías: ''informativa'', ''opinion personal'', ''elogio'', ''critica'', ''deseo'', ''peticion'', ''pregunta'', ''obligacion'', ''sugerencia'', ''sarcasmo / broma'', ''promesa'', ''amenaza'' o ''emotiva''.
 
     Quiero que tu respuesta sea única y solamente: entre corchetes ( [ ] ) la intención comunicativa global seleccionada.
     Mensaje:
 
-    """
-},  {
-        "name": "global-explained", "template": 
-    """
+    {text}
+    """,
+    name="global",
+    description="Clasificación de intención comunicativa global"
+)
+
+global_explained_template = Template(
+    template_text="""
     Vas a clasificar la intención comunicativa global de los mensajes que te voy a enviar.
     La intención del mensaje debe ser una de estas 13 categorías:
     - informativa: el mensaje aporta información sobre el tema que se expone.
@@ -31,5 +40,34 @@ templates = [
     Quiero que tu respuesta sea única y solamente: entre corchetes ( [ ] ) la intención comunicativa seleccionada.
     Mensaje:
 
+    {text}
+    """,
+    name="global-explained",
+    description="Clasificación de intención comunicativa global con explicaciones detalladas"
+)
+
+# Create a template manager specifically for intention tasks
+intention_manager = TemplateManager()
+intention_manager.register_template(global_intent_template)
+intention_manager.register_template(global_explained_template)
+
+# Legacy list for backward compatibility
+templates = [
+    {
+        "name": "global", 
+        "template": global_intent_template.template_text
+    },
+    {
+        "name": "global-explained", 
+        "template": global_explained_template.template_text
+    }
+]
+
+def get_intention_template_manager() -> TemplateManager:
     """
-}]
+    Get the intention template manager with predefined intention templates.
+    
+    Returns:
+        TemplateManager instance with intention templates
+    """
+    return intention_manager

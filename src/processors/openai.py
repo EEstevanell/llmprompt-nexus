@@ -1,8 +1,9 @@
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
-from clients.base import BaseClient
+from src.clients.base import BaseClient
 from src.models.model_config import ModelConfig
-from src.processors.base_processor import BaseProcessor
+from src.processors.base import BaseProcessor
+from src.templates.base import Template
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -10,10 +11,10 @@ logger = get_logger(__name__)
 class OpenAIProcessor(BaseProcessor):
     """Processor for OpenAI models."""
     
-    def __init__(self, client: BaseClient, model_config: ModelConfig, templates: Dict):
+    def __init__(self, client: BaseClient, model_config: ModelConfig, template: Optional[Template] = None):
+        super().__init__(template)
         self.client = client
         self.model_config = model_config
-        self.templates = templates
         logger.debug(f"Initialized OpenAI processor for model {model_config.id}")
         
     async def process_item(self, item: Dict) -> Dict[str, Any]:
@@ -47,14 +48,3 @@ class OpenAIProcessor(BaseProcessor):
         except Exception as e:
             logger.error(f"Error in OpenAI process_batch: {str(e)}")
             raise
-        
-    def _format_prompt(self, item: Dict) -> str:
-        """Format the prompt using the template and item data."""
-        template = self.templates.get(item.get("intention", "default"), "")
-        # Replace placeholders in the template with item data
-        prompt = template
-        for key, value in item.items():
-            if isinstance(value, str):
-                placeholder = f"{{{key}}}"
-                prompt = prompt.replace(placeholder, value)
-        return prompt

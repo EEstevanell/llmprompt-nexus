@@ -1,6 +1,6 @@
-# Chat Completions Project
+# UnifiedLLM Framework
 
-This project provides a flexible framework for interacting with multiple AI language models through their respective APIs, specifically designed for intention detection but adaptable for various use cases.
+A flexible framework for interacting with multiple Language Model APIs through a unified interface. This framework provides template-based interactions, rate limiting, and batch processing capabilities across different LLM providers.
 
 ## Project Structure
 
@@ -31,13 +31,12 @@ chat-completions/
 
 ## Features
 
-The `chat-completions` project provides the following features:
-
-- Support for multiple AI models (OpenAI and Perplexity)
-- Asynchronous processing for improved performance
-- Rate limiting to comply with API restrictions
-- Customizable templates for different use cases
-- Progress saving and error handling
+- **Multi-Provider Support**: Unified interface for OpenAI, Perplexity and other LLM providers
+- **Template System**: Flexible template management for different use cases
+- **API Management**: Built-in rate limiting and key validation
+- **Batch Processing**: Optimized batch operations where supported
+- **Async Processing**: Asynchronous request handling
+- **Extensible**: Easy to add new providers and templates
 
 ## Setup
 
