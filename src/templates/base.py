@@ -3,294 +3,116 @@ Base template system for the UnifiedLLM framework.
 """
 from typing import Dict, Any, Optional, List, Set
 import re
-from abc import ABC, abstractmethod
 
 class Template:
-    """
-    Base template class that represents a template with placeholders.
-    
-    This class manages the template text, required variables, and handles
-    rendering the template with provided values.
-    """
+    """Base template class that represents a template with placeholders."""
     
     def __init__(self, 
                  template_text: str, 
                  name: str = "unnamed", 
                  description: str = "",
-                 system_message: Optional[str] = None):
+                 system_message: Optional[str] = None,
+                 required_variables: Optional[Set[str]] = None):
         """
-        Initialize a template with template text and metadata.
+        Initialize a template.
         
         Args:
-            template_text: The template text with {placeholder} variables
+            template_text: The template text with {variable} placeholders
             name: Name of the template
             description: Description of what the template does
-            system_message: Optional system-level message for LLM APIs
+            system_message: Optional system message for chat models
+            required_variables: Optional set of required variables. If not provided,
+                             will be extracted from template_text
         """
         self.template_text = template_text
         self.name = name
         self.description = description
         self.system_message = system_message
-        self._required_vars = self._extract_variables(template_text)
-        
+        self._required_vars = required_variables or self._extract_variables(template_text)
+    
     def _extract_variables(self, template_text: str) -> Set[str]:
-        """
-        Extract variable names from the template text.
-        
-        Args:
-            template_text: The template text with {placeholder} variables
-            
-        Returns:
-            Set of variable names without the braces
-        """
-        # Find all patterns like {variable_name} in the template text
+        """Extract variable names from the template text."""
         pattern = r"\{([a-zA-Z0-9_]+)\}"
         matches = re.finditer(pattern, template_text)
-        
-        # Extract the variable names without the braces
-        variables = {match.group(1) for match in matches}
-        return variables
+        return {match.group(1) for match in matches}
     
     def get_required_variables(self) -> Set[str]:
-        """
-        Get the required variables for this template.
-        
-        Returns:
-            Set of variable names that need to be provided to render the template
-        """
+        """Get the required variables for this template."""
         return self._required_vars
     
     def validate_variables(self, variables: Dict[str, Any]) -> List[str]:
+        """Get list of missing required variables."""
+        return [var for var in self._required_vars if var not in variables]
+    
+    def prepare_variables(self, input_data: Dict[str, Any], defaults: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """
-        Validate that all required variables are provided.
+        Prepare and validate variables from input data.
         
         Args:
-            variables: Dictionary of variable names to values
+            input_data: Input data containing variables
+            defaults: Optional default values for variables
             
         Returns:
-            List of missing variable names, empty if all required variables are provided
+            Dictionary of prepared variables
+            
+        Raises:
+            ValueError: If required variables are missing
         """
-        provided_vars = set(variables.keys())
-        missing_vars = self._required_vars - provided_vars
-        return list(missing_vars)
+        variables = {}
+        
+        # Start with defaults if provided
+        if defaults:
+            variables.update(defaults)
+            
+        # Add input variables, overriding defaults
+        variables.update({
+            k: v for k, v in input_data.items() 
+            if k in self._required_vars
+        })
+        
+        # Validate
+        missing = self.validate_variables(variables)
+        if missing:
+            raise ValueError(f"Missing required variables: {', '.join(missing)}")
+            
+        return variables
     
     def render(self, variables: Dict[str, Any]) -> str:
         """
         Render the template with provided variables.
         
         Args:
-            variables: Dictionary of variable names to values
+            variables: Dictionary of variables to use in template
             
         Returns:
-            The rendered template text
+            Rendered template text
             
         Raises:
             ValueError: If required variables are missing
         """
-        missing_vars = self.validate_variables(variables)
-        
-        if missing_vars:
-            raise ValueError(f"Missing required variables: {', '.join(missing_vars)}")
-            
+        missing = self.validate_variables(variables)
+        if missing:
+            raise ValueError(f"Missing required variables: {', '.join(missing)}")
         return self.template_text.format(**variables)
-    
-    def to_dict(self) -> Dict[str, Any]:
-        """
-        Convert the template to a dictionary representation.
-        
-        Returns:
-            Dictionary with template metadata and text
-        """
-        data = {
-            "template": self.template_text,
-            "name": self.name,
-            "description": self.description
-        }
-        if self.system_message:
-            data["system_message"] = self.system_message
-        return data
     
     def get_messages(self, variables: Dict[str, Any]) -> List[Dict[str, str]]:
         """
-        Get the template as a list of messages for LLM APIs.
+        Get formatted messages list including system message if present.
         
         Args:
-            variables: Dictionary of variable values
+            variables: Dictionary of variables to use in template
             
         Returns:
-            List of message dictionaries with role and content
+            List of message dictionaries for chat models
         """
         messages = []
-        
-        # Add system message if present
         if self.system_message:
             messages.append({
                 "role": "system",
                 "content": self.system_message
             })
-            
-        # Add user message with rendered template
         messages.append({
             "role": "user",
             "content": self.render(variables)
         })
-        
         return messages
-
-
-class TemplateStrategy(ABC):
-    """
-    Abstract base class for template strategies.
-    
-    Template strategies determine how to select and apply templates based
-    on input data and the current context.
-    """
-    
-    @abstractmethod
-    def select_template(self, input_data: Dict[str, Any], templates: Dict[str, Template]) -> Template:
-        """
-        Select the appropriate template based on input data.
-        
-        Args:
-            input_data: The input data containing intention or purpose
-            templates: Dictionary of available templates
-            
-        Returns:
-            Selected Template instance
-            
-        Raises:
-            ValueError: If no suitable template is found
-        """
-        pass
-    
-    @abstractmethod
-    def prepare_variables(self, input_data: Dict[str, Any], template: Template) -> Dict[str, Any]:
-        """
-        Prepare variables for template rendering based on input data.
-        
-        Args:
-            input_data: The input data with values for template variables
-            template: The template to render
-            
-        Returns:
-            Dictionary of variables to use for template rendering
-            
-        Raises:
-            ValueError: If required variables cannot be prepared
-        """
-        pass
-
-
-class IntentionTemplateStrategy(TemplateStrategy):
-    """
-    Strategy for selecting templates based on an 'intention' field.
-    
-    This strategy selects a template by matching the 'intention' field
-    in the input data with a template key.
-    """
-    
-    def select_template(self, input_data: Dict[str, Any], templates: Dict[str, Template]) -> Template:
-        """
-        Select template based on 'intention' field in input data.
-        
-        Args:
-            input_data: Input data with 'intention' field
-            templates: Available templates
-            
-        Returns:
-            Selected Template instance
-            
-        Raises:
-            ValueError: If no matching template is found or 'intention' field is missing
-        """
-        if 'intention' not in input_data:
-            if 'default' in templates:
-                return templates['default']
-            raise ValueError("Input data missing 'intention' field and no default template available")
-            
-        intention = input_data['intention']
-        
-        if intention not in templates:
-            if 'default' in templates:
-                return templates['default']
-            raise ValueError(f"No template found for intention '{intention}' and no default template available")
-            
-        return templates[intention]
-    
-    def prepare_variables(self, input_data: Dict[str, Any], template: Template) -> Dict[str, Any]:
-        """
-        Prepare variables for template rendering by directly using input data.
-        
-        Args:
-            input_data: Input data with variable values
-            template: The template to render
-            
-        Returns:
-            Variables to use for template rendering
-            
-        Raises:
-            ValueError: If required variables are missing
-        """
-        required_vars = template.get_required_variables()
-        
-        # Check for missing variables
-        missing_vars = [var for var in required_vars if var not in input_data]
-        if missing_vars:
-            raise ValueError(f"Missing required variables for template: {', '.join(missing_vars)}")
-            
-        # Only include the variables required by the template
-        variables = {key: input_data[key] for key in required_vars}
-        
-        return variables
-
-
-class TranslationTemplateStrategy(TemplateStrategy):
-    """
-    Specialized strategy for translation templates.
-    """
-    
-    def select_template(self, input_data: Dict[str, Any], templates: Dict[str, Template]) -> Template:
-        """
-        Select template for translation tasks.
-        
-        Args:
-            input_data: Input data for translation task
-            templates: Available templates
-            
-        Returns:
-            Translation template
-            
-        Raises:
-            ValueError: If translation template is not found
-        """
-        if 'translate' in templates:
-            return templates['translate']
-        if 'default' in templates:
-            return templates['default']
-        raise ValueError("No translation or default template found")
-    
-    def prepare_variables(self, input_data: Dict[str, Any], template: Template) -> Dict[str, Any]:
-        """
-        Prepare variables specific to translation templates.
-        
-        Args:
-            input_data: Translation task data with text, source_lang, target_lang
-            template: The template to render
-            
-        Returns:
-            Variables to use for template rendering
-            
-        Raises:
-            ValueError: If required variables are missing
-        """
-        required_vars = template.get_required_variables()
-        
-        # Create a variables map with all input data
-        variables = {key: value for key, value in input_data.items() if key in required_vars}
-        
-        # Check for missing variables
-        missing_vars = [var for var in required_vars if var not in variables]
-        if missing_vars:
-            raise ValueError(f"Missing required variables for translation template: {', '.join(missing_vars)}")
-        
-        return variables

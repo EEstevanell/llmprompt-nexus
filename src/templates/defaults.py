@@ -1,15 +1,14 @@
 """
 Default template configuration for UnifiedLLM framework.
 """
+from pathlib import Path
 from typing import Dict, Any
 
 from src.templates.registry import registry
 from src.templates.manager import TemplateManager
-from src.templates.base import TemplateStrategy
 
 # Core template types supported by the framework
 TEMPLATE_TYPES = [
-    'sentiment',
     'classification',
     'intent',
     'qa',
@@ -19,34 +18,37 @@ TEMPLATE_TYPES = [
 
 def get_template_manager(template_type: str = 'translation') -> TemplateManager:
     """
-    Get a template manager for a specific template type.
+    Get template manager for specified template type.
     
     Args:
-        template_type: One of the supported template types
+        template_type: Type of templates to load (e.g., 'translation', 'qa')
         
     Returns:
-        TemplateManager instance for the specified type
-        
-    Raises:
-        ValueError: If template type is not supported
+        TemplateManager with templates loaded from config/templates/{template_type}.yaml
     """
     if template_type not in TEMPLATE_TYPES:
-        raise ValueError(f"Unsupported template type: {template_type}. Must be one of: {TEMPLATE_TYPES}")
+        raise ValueError(f"Unknown template type: {template_type}")
         
-    domain_manager = registry.get_domain(template_type)
-    return domain_manager
+    config_dir = Path(__file__).parent.parent.parent / 'config' / 'templates'
+    config_file = config_dir / f"{template_type}.yaml"
+    
+    if not config_file.exists():
+        raise FileNotFoundError(f"Template config file not found: {config_file}")
+        
+    return TemplateManager.from_yaml(config_file)
 
 def render_template(template_name: str, variables: Dict[str, Any], template_type: str = 'translation') -> str:
     """
-    Render a template with the given variables.
+    Helper function to render a template by name.
     
     Args:
-        template_name: Name of the template to render
-        variables: Dictionary of variables for template rendering
-        template_type: Type of template to use
+        template_name: Name of template to render
+        variables: Variables to use in template
+        template_type: Type of template to use (e.g., 'translation', 'qa')
         
     Returns:
-        Rendered template string
+        Rendered template text
     """
     manager = get_template_manager(template_type)
-    return manager.render_template(template_name, variables)
+    template = manager.get_template(template_name)
+    return template.render(variables)

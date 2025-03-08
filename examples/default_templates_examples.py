@@ -141,7 +141,7 @@ async def main():
     try:
         # Initialize framework with API keys
         api_keys = {
-            "perplexity": os.getenv("PERPLEXITY_API_KEY") or "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",
+            "perplexity": os.getenv("PERPLEXITY_API_KEY")  or "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",
             "openai": os.getenv("OPENAI_API_KEY")
         }
         

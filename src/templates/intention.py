@@ -1,7 +1,7 @@
 """
 Intention-based templates for the UnifiedLLM framework.
 """
-from src.templates.base import Template, IntentionTemplateStrategy
+from src.templates.base import Template
 from src.templates.manager import TemplateManager
 
 # Create standard intention templates
@@ -50,18 +50,6 @@ global_explained_template = Template(
 intention_manager = TemplateManager()
 intention_manager.register_template(global_intent_template)
 intention_manager.register_template(global_explained_template)
-
-# Legacy list for backward compatibility
-templates = [
-    {
-        "name": "global", 
-        "template": global_intent_template.template_text
-    },
-    {
-        "name": "global-explained", 
-        "template": global_explained_template.template_text
-    }
-]
 
 def get_intention_template_manager() -> TemplateManager:
     """
