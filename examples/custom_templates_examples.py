@@ -15,7 +15,7 @@ async def demonstrate_custom_templates():
     """Demonstrate usage of both YAML-based and dictionary-based custom templates."""
     api_keys = {
         "openai": os.getenv("OPENAI_API_KEY", "your-key-here"),
-        "perplexity": os.getenv("PERPLEXITY_API_KEY", "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")
+        "perplexity": os.getenv("PERPLEXITY_API_KEY", "your-key-here")
     }
     
     framework = UnifiedLLM(api_keys)
