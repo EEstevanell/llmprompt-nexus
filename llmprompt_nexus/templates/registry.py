@@ -32,7 +32,7 @@ class TemplateRegistry:
     def load_all_templates(self, config_dir: Optional[Path] = None):
         """Load all templates from the config directory."""
         if config_dir is None:
-            config_dir = Path(__file__).parent / 'config' / 'templates'
+            config_dir = Path(__file__).parent.parent / 'config' / 'templates'
             
         if not config_dir.exists():
             logger.warning(f"Template config directory {config_dir} does not exist")

@@ -1,1 +1,1 @@
-from nexus_manager import NexusManager
+from llmprompt_nexus.nexus_manager import NexusManager

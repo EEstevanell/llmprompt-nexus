@@ -59,7 +59,7 @@ class ModelRegistry:
 registry = ModelRegistry()
 
 # Load configurations from YAML files in config/models directory
-config_dir = Path(__file__).parent / 'config' / 'models'
+config_dir = Path(__file__).parent.parent / 'config' / 'models'
 if config_dir.exists():
     logger.info(f"Loading model configurations from directory: {config_dir}")
     for config_file in config_dir.glob('*.yaml'):
