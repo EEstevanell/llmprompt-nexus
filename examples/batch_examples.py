@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 from typing import Dict, List
 
-from src.core.framework import UnifiedLLM
+from src.core.framework import NexusManager
 from src.templates.defaults import get_template_manager
 from src.templates.manager import TemplateManager
 from src.utils.logger import get_logger
@@ -34,7 +34,7 @@ async def demonstrate_default_template_batch():
         "openai": os.getenv("OPENAI_API_KEY")
     }
     
-    framework = UnifiedLLM(api_keys)
+    framework = NexusManager(api_keys)
     
     # Get default translation template
     tm = get_template_manager('translation')
@@ -86,7 +86,7 @@ async def demonstrate_custom_template_batch():
         "openai": os.getenv("OPENAI_API_KEY")
     }
     
-    framework = UnifiedLLM(api_keys)
+    framework = NexusManager(api_keys)
     
     # Create template manager and load custom template
     tm = TemplateManager()

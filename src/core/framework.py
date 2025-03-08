@@ -24,7 +24,7 @@ from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-class UnifiedLLM:
+class NexusManager:
     """
     A unified framework for interacting with various LLM providers through a consistent interface.
     

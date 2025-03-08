@@ -6,12 +6,12 @@ import asyncio
 import os
 from typing import Dict, Any
 
-from src.core.framework import UnifiedLLM
+from src.core.framework import NexusManager
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-async def translation_example(framework: UnifiedLLM):
+async def translation_example(framework: NexusManager):
     """Demonstrate translation template usage."""
     logger.info("\n=== Translation Example ===")
     input_data = {
@@ -26,7 +26,7 @@ async def translation_example(framework: UnifiedLLM):
     )
     logger.info(f"Translation Result: {result.get('response', 'Error')}")
 
-async def summarization_example(framework: UnifiedLLM):
+async def summarization_example(framework: NexusManager):
     """Demonstrate summarization template usage."""
     logger.info("\n=== Summarization Example ===")
     input_data = {
@@ -43,7 +43,7 @@ async def summarization_example(framework: UnifiedLLM):
     )
     logger.info(f"Summarization Result: {result.get('response', 'Error')}")
 
-async def classification_example(framework: UnifiedLLM):
+async def classification_example(framework: NexusManager):
     """Demonstrate text classification template usage."""
     logger.info("\n=== Classification Example ===")
     input_data = {
@@ -57,7 +57,7 @@ async def classification_example(framework: UnifiedLLM):
     )
     logger.info(f"Classification Result: {result.get('response', 'Error')}")
 
-async def qa_example(framework: UnifiedLLM):
+async def qa_example(framework: NexusManager):
     """Demonstrate question answering template usage."""
     logger.info("\n=== Q&A Example ===")
     input_data = {
@@ -75,7 +75,7 @@ async def qa_example(framework: UnifiedLLM):
     )
     logger.info(f"Q&A Result: {result.get('response', 'Error')}")
 
-async def intent_example(framework: UnifiedLLM):
+async def intent_example(framework: NexusManager):
     """Demonstrate intent detection template usage."""
     logger.info("\n=== Intent Detection Example ===")
     input_data = {
@@ -96,7 +96,7 @@ async def main():
         "perplexity": os.getenv("PERPLEXITY_API_KEY", "your-key-here")
     }
     
-    framework = UnifiedLLM(api_keys)
+    framework = NexusManager(api_keys)
     
     await translation_example(framework)
     await summarization_example(framework)

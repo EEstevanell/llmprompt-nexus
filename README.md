@@ -1,211 +1,155 @@
-# UnifiedLLM Framework
+# LLMPromptNexus
 
-A unified framework for working with different language models through a standardized interface.
+A unified framework for interacting with Large Language Models (LLMs) through a standardized interface. LLMPromptNexus simplifies working with multiple LLM providers while providing powerful templating and batching capabilities.
 
-## Core Templates
+## 🚀 Quick Start
 
-The framework provides six core template types for common NLP tasks:
-
-1. **Translation** (`translation`)
-   - Translates text between languages
-   - Required variables: text, source_language, target_language
-
-3. **Text Classification** (`classification`)
-   - Classifies text into predefined categories
-   - Required variables: text, categories
-
-4. **Intent Detection** (`intent`)
-   - Detects user intentions from text
-   - Required variables: text
-
-5. **Question Answering** (`qa`)
-   - Answers questions based on provided context
-   - Required variables: context, question
-
-6. **Summarization** (`summarization`)
-   - Creates concise summaries of longer texts
-   - Required variables: text, length
-
-## Usage
+```bash
+pip install llmprompt-nexus
+```
 
 ```python
-from src.templates.defaults import get_template_manager
+from llmprompt_nexus import NexusManager
 
-# Get a template manager for your task
-tm = get_template_manager('translation')
+# Initialize with your API keys
+llm = NexusManager({
+    "openai": "your-openai-key",
+    "perplexity": "your-perplexity-key"
+})
 
-# Prepare your input data
-input_data = {
-    "text": "Hello world",
-    "source_language": "English",
-    "target_language": "Spanish"
-}
-
-# Get the template and use it
-template = tm.get_template('translation')
-result = await framework.run_with_model(
-    input_data=input_data,
-    model_id="your-model",
-    template=template
+# Simple translation example
+result = await llm.run_with_model(
+    input_data={
+        "text": "Hello world",
+        "source_language": "English",
+        "target_language": "Spanish"
+    },
+    model_id="sonar-pro",
+    template_name="translation"
 )
 ```
 
-## Custom Templates
+## 🌟 Key Features
 
-While the framework provides core templates for common tasks, you can create custom templates:
+- **Multiple LLM Providers**: Seamlessly work with OpenAI, Perplexity, and more through a single interface
+- **Smart Template System**: Pre-built and custom templates for common NLP tasks
+- **Efficient Batch Processing**: Handle large-scale operations with automatic rate limiting
+- **Built-in Safety**: Automatic retries, rate limiting, and error handling
 
-1. Create a YAML file in `~/.config/unifiedllm/templates/`
-2. Define your template following this structure:
-```yaml
-templates:
-  your_template_name:
-    template: |
-      Your template text with {variables}
-    description: "Template description"
-    system_message: "Optional system message for LLM"
+## 📦 Installation
+
+### Using pip
+```bash
+pip install llmprompt-nexus
 ```
 
-## Configuration
+### From source
+```bash
+git clone https://github.com/EEstevanell/llmprompt-nexus.git
+cd llmprompt-nexus
+pip install -e .
+```
 
-Templates are configured in YAML files under `config/templates/`. Each core template type has its own configuration file.
+## 🔑 Configuration
 
-## API Keys
-
-Set your API keys as environment variables:
+1. Set your API keys as environment variables:
 ```bash
 export OPENAI_API_KEY="your-key"
 export PERPLEXITY_API_KEY="your-key"
 ```
 
-## Examples
-
-See `examples/use_templates.py` for complete examples of using each template type.
-
-## Project Structure
-
-The project structure of `chat-completions` is as follows:
-
-```
-chat-completions/
-├── main.py
-├── clients/
-│   ├── __init__.py
-│   ├── base.py
-│   ├── perplexity.py
-│   └── openai.py
-├── models/
-│   ├── __init__.py
-│   ├── config.py
-│   └── registry.py
-├── rate_limiting/
-│   ├── __init__.py
-│   └── limiter.py
-├── templates/
-│   ├── __init__.py
-│   └── intention.py
-└── utils/
-    ├── __init__.py
-    └── async_utils.py
+2. Or provide them during initialization:
+```python
+llm = UnifiedLLM({
+    "openai": "your-openai-key",
+    "perplexity": "your-perplexity-key"
+})
 ```
 
-## Features
+## 📘 Basic Usage
 
-- **Multi-Provider Support**: Unified interface for OpenAI, Perplexity and other LLM providers
-- **Template System**: Flexible template management for different use cases
-- **API Management**: Built-in rate limiting and key validation
-- **Batch Processing**: Optimized batch operations where supported
-- **Async Processing**: Asynchronous request handling
-- **Extensible**: Easy to add new providers and templates
+### Single Operations
 
-## Setup
+```python
+# Simple text generation
+response = await llm.generate(
+    prompt="Explain quantum computing briefly",
+    model_id="sonar-pro"
+)
 
-To set up the project, follow these steps:
+# Using templates
+translation = await llm.run_with_model(
+    input_data={
+        "text": "Hello world",
+        "source_language": "English",
+        "target_language": "Spanish"
+    },
+    model_id="sonar-pro",
+    template_name="translation"
+)
+```
 
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/EEstevanell/chat-completions.git
-   cd chat-completions
-   ```
+### Batch Processing
 
-2. Install the required dependencies:
-   ```bash
-   pip install -r requirements.txt
-   ```
+```python
+texts = ["First text", "Second text", "Third text"]
+batch_inputs = [
+    {
+        "text": text,
+        "source_language": "English",
+        "target_language": "Spanish"
+    }
+    for text in texts
+]
 
-3. Set up your API keys as environment variables:
-   ```bash
-   export PERPLEXITY_API_KEY="your_perplexity_api_key"
-   export OPENAI_API_KEY="your_openai_api_key"
-   ```
+results = await llm.run_batch_with_model(
+    input_data=batch_inputs,
+    model_id="sonar-pro",
+    template_name="translation"
+)
+```
 
-## Usage
+## 🎯 Built-in Templates
 
-To use the project, follow these steps:
+- **Translation**: Convert text between languages
+- **Classification**: Categorize text into predefined groups
+- **Intent Detection**: Identify user intentions from text
+- **Question Answering**: Generate answers based on context
+- **Summarization**: Create concise text summaries
 
-1. Place your input TSV files in the `inputs/` directory.
+## ⚙️ Custom Templates
 
-2. Modify the `main.py` file to select the models you want to use:
-   ```python
-   models_to_run = ["gpt-4o-mini", "sonar-small", "sonar-huge"]
-   ```
+Create your own templates using YAML:
 
-3. Run the main script:
-   ```bash
-   python main.py
-   ```
+```yaml
+templates:
+  technical_qa:
+    template: |
+      Context: {context}
+      Question: {question}
+      Provide a technical answer based on the context.
+    description: "Technical Q&A template"
+    system_message: "You are a technical expert."
+    required_variables: ["context", "question"]
+```
 
-   The script will process each input file with the selected models and save the results in the same directory as the input files.
+## 📚 Documentation
 
-## Components
+For detailed documentation, visit our [documentation site](https://llmprompt-nexus.readthedocs.io/).
 
-### Clients
+## 🤝 Contributing
 
-The `clients/` directory contains the API clients for different services:
+Contributions are welcome! Please read our [Contributing Guide](CONTRIBUTING.md) for details on how to submit pull requests, report issues, and contribute to the project.
 
-- `base.py`: Abstract base class for API clients
-- `perplexity.py`: Client for the Perplexity API
-- `openai.py`: Client for the OpenAI API
+## 📄 License
 
-### Models
+This project is licensed under the Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0). This means you are free to:
+- Share and redistribute the material in any medium or format
+- Adapt, remix, and transform the material
 
-The `models/` directory handles model configuration and registration:
+Under these conditions:
+- **Attribution** — You must give appropriate credit when using this work, especially in academic research
+- **NonCommercial** — You may not use the material for commercial purposes
 
-- `config.py`: Defines the `ModelConfig` class
-- `registry.py`: Manages the registration and retrieval of model configurations
-
-### Rate Limiting
-
-The `rate_limiting/` directory contains the rate limiting implementation:
-
-- `limiter.py`: Implements the `RateLimiter` class to manage API request rates
-
-### Templates
-
-The `templates/` directory stores the templates for different use cases:
-
-- `intention.py`: Contains templates for intention detection
-
-### Utils
-
-The `utils/` directory includes utility functions:
-
-- `async_utils.py`: Contains the `ProcessingManager` class for asynchronous processing
-
-## Customization
-
-To add new models or APIs:
-
-1. Create a new client in the `clients/` directory.
-
-2. Register the new model in `models/registry.py`.
-
-3. Update the `main.py` file to include the new model in `models_to_run`.
-
-To modify templates:
-
-- Edit or add new templates in `templates/intention.py`.
-
-## License
-
-This project is licensed under the MIT License.
+For the full license text, see the [LICENSE](LICENSE) file.
 

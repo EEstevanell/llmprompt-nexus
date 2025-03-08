@@ -6,7 +6,7 @@ import asyncio
 import os
 from pathlib import Path
 
-from src.core.framework import UnifiedLLM
+from src.core.framework import NexusManager
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -18,7 +18,7 @@ async def demonstrate_custom_templates():
         "perplexity": os.getenv("PERPLEXITY_API_KEY", "your-key-here")
     }
     
-    framework = UnifiedLLM(api_keys)
+    framework = NexusManager(api_keys)
     
     # Example 1: Using dictionary-based template
     logger.info("\n=== Technical Q&A Example (Dictionary-based) ===")
