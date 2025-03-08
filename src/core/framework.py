@@ -14,7 +14,7 @@ from pathlib import Path
 import pandas as pd
 from typing import Dict, List, Optional, Any, Union
 from src.core.client_factory import ClientFactory
-from src.processors.base import BaseProcessor
+from src.processors.base import BaseProcessor, BatchVariableProvider, SimpleBatchVariableProvider
 from src.processors.factory import ProcessorFactory
 from src.models.model_config import ModelConfig
 from src.models.registry import registry
@@ -109,28 +109,26 @@ class UnifiedLLM:
         text: str,
         source_lang: str,
         target_lang: str,
-        model_id: str,
-        template: Optional[Template] = None
+        model_id: str
     ) -> str:
         """
-        High-level method to translate text using the specified model.
+        High-level method to translate text using the specified model with default translation template.
+        For custom translation templates, use run_with_model instead.
         
         Args:
             text (str): The text to translate
             source_lang (str): Source language code (e.g., 'en')
             target_lang (str): Target language code (e.g., 'es')
             model_id (str): The model ID to use for translation
-            template (Template, optional): Custom template to use
             
         Returns:
             str: The translated text
         """
-        # Use default translation template if none provided
-        if template is None:
-            template_manager = get_default_template_manager()
-            template = template_manager.get_template('translate')
+        # Always use default translation template
+        template_manager = get_default_template_manager()
+        template = template_manager.get_template('translate')
         
-        # Create input data
+        # Create input data with standard translation variables
         input_data = {
             'text': text,
             'source_lang': source_lang,
@@ -149,25 +147,23 @@ class UnifiedLLM:
         self,
         texts: List[Dict[str, str]],
         model_id: str,
-        template: Optional[Template] = None,
         batch_size: int = 10
     ) -> List[Dict[str, str]]:
         """
-        Translate a batch of texts using the specified model.
+        Translate a batch of texts using the specified model with default translation template.
+        For custom translation templates, use run_with_model instead.
         
         Args:
             texts (List[Dict]): List of dictionaries with 'text', 'source_lang', and 'target_lang' keys
             model_id (str): The model ID to use for translation
-            template (Template, optional): Custom template to use
             batch_size (int, optional): Number of texts to process in each batch. Defaults to 10.
             
         Returns:
             List[Dict[str, str]]: List of dictionaries with translation results
         """
-        # Use default translation template if none provided
-        if template is None:
-            template_manager = get_default_template_manager()
-            template = template_manager.get_template('translate')
+        # Always use default translation template
+        template_manager = get_default_template_manager()
+        template = template_manager.get_template('translate')
         
         return await self.run_with_model(
             input_data=texts,
@@ -175,7 +171,7 @@ class UnifiedLLM:
             template=template,
             batch_mode=True
         )
-    
+        
     async def process_file(
         self,
         file_path: Path,
@@ -295,31 +291,125 @@ class UnifiedLLM:
         tasks = [process_row(row, i) for i, row in enumerate(rows)]
         await asyncio.gather(*tasks)
     
+    async def process_batch_with_template(
+        self,
+        inputs: List[Dict[str, Any]],
+        model_id: str,
+        template: Template,
+        global_vars: Optional[Dict[str, Any]] = None,
+        transform_input: Optional[callable] = None,
+        batch_size: int = 10
+    ) -> List[Dict[str, Any]]:
+        """
+        Simplified interface for batch processing with templates.
+        
+        Args:
+            inputs: List of input dictionaries to process
+            model_id: The model ID to use
+            template: Template to use for formatting
+            global_vars: Variables that apply to all examples in the batch
+            transform_input: Optional function to transform each input before template rendering.
+                           Function signature: (dict) -> dict
+            batch_size: Size of batches for processing
+            
+        Returns:
+            List of results from the model
+        """
+        if transform_input is None:
+            # Default transform just returns the input as is
+            transform_input = lambda x: x
+            
+        # Transform each input and add global variables
+        processed_inputs = []
+        for input_data in inputs:
+            # Transform the input first
+            transformed = transform_input(input_data)
+            
+            # Add global variables if any
+            if global_vars:
+                transformed = {**global_vars, **transformed}
+                
+            processed_inputs.append(transformed)
+            
+        return await self.run_with_model(
+            input_data=processed_inputs,
+            model_id=model_id,
+            template=template,
+            batch_mode=True
+        )
+
     async def run_with_model(
         self,
         input_data: Union[Dict[str, Any], List[Dict[str, Any]]],
         model_id: str,
         template: Optional[Template] = None,
-        batch_mode: bool = False
+        batch_mode: bool = False,
+        variable_mapping: Optional[Dict[str, str]] = None,
+        batch_variable_provider: Optional[BatchVariableProvider] = None,
+        global_variables: Optional[Dict[str, Any]] = None
     ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
         """
         Process input data with a specific model using a template.
         
         This is the main generic interface for processing any kind of input
-        with any supported model. The template defines how the input is formatted
-        for the model.
+        with any supported model. For simpler batch processing with templates,
+        consider using process_batch_with_template instead.
         
         Args:
             input_data: Single dictionary or list of dictionaries containing input data
             model_id: The model ID to use for processing
             template: Template instance to use for formatting the prompt
             batch_mode: Whether to process as a batch (if input_data is a list)
+            variable_mapping: Optional mapping from source variable names to template variable names
+            batch_variable_provider: Optional provider for handling global and per-example variables
+            global_variables: Optional dictionary of variables that apply to all examples
             
         Returns:
             Processed results from the model
         """
         # Get model configuration
         model_config = registry.get_model(model_id)
+        
+        # If no batch variable provider but we have global vars or mapping, create a simple provider
+        if batch_variable_provider is None and (global_variables or variable_mapping):
+            batch_variable_provider = SimpleBatchVariableProvider(
+                global_vars=global_variables or {},
+                variable_mapping=variable_mapping
+            )
+            
+        # Handle variable mapping through the provider if we have one
+        if batch_variable_provider is not None:
+            if batch_mode and isinstance(input_data, list):
+                # Get global variables once
+                global_vars = batch_variable_provider.get_global_variables()
+                
+                # Map each example with both global and example-specific variables
+                input_data = [
+                    {
+                        **global_vars,
+                        **batch_variable_provider.get_example_variables(item)
+                    }
+                    for item in input_data
+                ]
+            elif not batch_mode and isinstance(input_data, dict):
+                # For single items, merge global and example variables
+                input_data = {
+                    **batch_variable_provider.get_global_variables(),
+                    **batch_variable_provider.get_example_variables(input_data)
+                }
+                
+        # For backward compatibility, handle old-style variable mapping
+        elif variable_mapping is not None:
+            if batch_mode and isinstance(input_data, list):
+                input_data = [
+                    {variable_mapping.get(k, k): v for k, v in item.items()}
+                    for item in input_data
+                ]
+            elif not batch_mode and isinstance(input_data, dict):
+                input_data = {
+                    variable_mapping.get(k, k): v 
+                    for k, v in input_data.items()
+                }
         
         # Get client and processor
         client = self.client_factory.get_client(model_config.api)
@@ -340,4 +430,3 @@ class UnifiedLLM:
         except Exception as e:
             logger.error(f"Error processing with model {model_id}: {str(e)}")
             raise
-            

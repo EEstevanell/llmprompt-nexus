@@ -42,7 +42,7 @@ class PerplexityProcessor(BaseProcessor):
             )
             
             logger.debug("Received response from Perplexity API")
-            return {'response': response.get('text', ''), 'model': self.model_config.id}
+            return {'response': response.get('response', ''), 'model': self.model_config.id}
         except Exception as e:
             logger.error(f"Error in Perplexity process_item: {str(e)}")
             raise

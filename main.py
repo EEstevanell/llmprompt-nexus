@@ -15,146 +15,6 @@ from src.templates.defaults import get_template_manager, render_template
 
 logger = get_logger(__name__)
 
-
-async def process_with_llm(
-    text: str, 
-    intention: str,
-    model_id: str,
-    api_keys: Dict[str, str],
-    templates: Optional[Dict[str, str]] = None,
-    field_mapping: Optional[Dict[str, str]] = None
-) -> str:
-    """
-    Process text with a language model using specified intention/template.
-    
-    Args:
-        text (str): The text to process
-        intention (str): The processing intention (defines template to use)
-        model_id (str): The model ID to use
-        api_keys (Dict[str, str]): Dictionary of API keys
-        templates (Dict[str, str]): Optional custom templates to use
-        field_mapping (Dict[str, str]): Optional mapping from input fields to template variables
-        
-    Returns:
-        str: The processed text response
-    """
-    # Initialize framework
-    framework = UnifiedLLM(api_keys)
-    
-    # Prepare input data with optional field mapping
-    input_data = {'text': text, 'intention': intention}
-    
-    # Process the text
-    result = await framework.run_with_model(
-        input_data=input_data,
-        model_id=model_id,
-        templates=templates
-    )
-    
-    return result.get('response', '')
-
-
-async def translate_text(
-    text: str,
-    source_lang: str,
-    target_lang: str,
-    model_id: str,
-    api_keys: Dict[str, str],
-    custom_template: Optional[str] = None,
-    field_mapping: Optional[Dict[str, str]] = None
-) -> str:
-    """
-    Translate text using the framework with optional custom template.
-    
-    Args:
-        text (str): The text to translate
-        source_lang (str): Source language code (e.g., 'en')
-        target_lang (str): Target language code (e.g., 'es')
-        model_id (str): The model ID to use
-        api_keys (Dict[str, str]): Dictionary of API keys
-        custom_template (str, optional): Custom translation template
-        field_mapping (Dict[str, str], optional): Custom field mapping
-        
-    Returns:
-        str: The translated text
-    """
-    # Initialize framework and template manager
-    framework = UnifiedLLM(api_keys)
-    template_manager = get_template_manager()
-    
-    # Set up templates - either use custom or get built-in from manager
-    if custom_template:
-        template_manager.register_template(Template(
-            template_text=custom_template,
-            name="custom_translate",
-            description="Custom translation template"
-        ))
-        templates = {'translate': custom_template}
-    else:
-        # Use the built-in translation template
-        built_in_template = template_manager.get_template('translate')
-        templates = {'translate': built_in_template.template_text}
-    
-    # Prepare input data with field mapping
-    input_data = {
-        'text': text,
-        'source_lang': source_lang,
-        'target_lang': target_lang
-    }
-    
-    if field_mapping:
-        input_data = template_manager.apply_field_mapping(input_data, field_mapping)
-    
-    # Process the translation
-    result = await framework.run_with_model(
-        input_data=input_data,
-        model_id=model_id,
-        templates=templates
-    )
-    
-    return result.get('response', '')
-
-
-async def process_batch(
-    items: List[Dict[str, str]], 
-    model_id: str,
-    api_keys: Dict[str, str],
-    templates: Optional[Dict[str, str]] = None,
-    field_mapping: Optional[Dict[str, str]] = None,
-    batch_size: int = 10
-) -> List[Dict]:
-    """
-    Process a batch of items with a language model.
-    
-    Args:
-        items: List of dictionaries with text and intention
-        model_id: The model ID to use
-        api_keys: Dictionary of API keys
-        templates: Optional custom templates to use
-        field_mapping: Optional mapping from input fields to template variables
-        batch_size: Size of batches for processing
-    """
-    framework = UnifiedLLM(api_keys)
-    
-    # Apply field mapping if provided
-    if field_mapping:
-        mapped_items = []
-        for item in items:
-            mapped_item = {}
-            for dest_key, src_key in field_mapping.items():
-                if src_key in item:
-                    mapped_item[dest_key] = item[src_key]
-            mapped_items.append(mapped_item)
-        items = mapped_items
-    
-    return await framework.run_with_model(
-        input_data=items,
-        model_id=model_id,
-        templates=templates,
-        batch_mode=True
-    )
-
-
 async def main():
     try:
         # Load API keys from environment variables
@@ -196,76 +56,95 @@ async def main():
                 except Exception as e:
                     logger.error(f"Error translating with {model_id}: {str(e)}")
         
-        # 2. Translation with custom template
-        logger.info("\n--- Example 2: Translation with Custom Template ---")
+        # 2. Translation with custom template using simplified batch interface
+        logger.info("\n--- Example 2: Translation with Custom Template (Simple Batch) ---")
         
-        # Register a custom template with the manager
+        # Register a custom template with different variable names
         custom_template = """
-        Please translate the following text:
+        Please act as an expert translator and translate this content:
         
-        Original ({input_language}): 
+        Input Language: {input_language}
+        Output Language: {output_language}
+        Preserve style: {preserve_style}
+        
+        Content to translate:
         {input_text}
         
-        Translate to {output_language}. 
-        Make sure to maintain the original tone and meaning.
+        Translation guidelines:
+        - Maintain the original tone and meaning
+        - Preserve any technical terminology
+        - Ensure natural flow in the target language
         """
         
         template_manager.register_template(Template(
             template_text=custom_template,
             name="custom_translate",
-            description="Custom translation template with detailed instructions"
+            description="Custom translation template with different variable names"
         ))
+
+        # Create batch of texts
+        batch_texts = [{'text': text} for text in texts * 2]  # Multiply texts for demonstration
         
-        # Create a field mapping using template manager
-        field_mapping = {
-            "input_text": "text",
-            "input_language": "source_lang",
-            "output_language": "target_lang"
-        }
+        # Define a simple transform function
+        def transform_input(input_dict: Dict) -> Dict:
+            """Transform input dictionary to match template variables."""
+            return {
+                'input_text': input_dict['text']
+            }
         
-        for text in texts:
-            logger.info(f"Original text (English): {text}")
+        # Process batch with global variables and transform function
+        batch_results = await framework.process_batch_with_template(
+            inputs=batch_texts,
+            model_id="sonar-pro",
+            template=template_manager.get_template("custom_translate"),
+            global_vars={
+                'input_language': 'English',
+                'output_language': 'Spanish',
+                'preserve_style': 'yes'
+            },
+            transform_input=transform_input
+        )
+        
+        for i, result in enumerate(batch_results):
+            logger.info(f"\nBatch item {i+1}:")
+            logger.info(f"Original: {batch_texts[i]['text']}")
+            logger.info(f"Translation: {result.get('response', 'Error')}")
+
+        # 3. Translation with advanced formatting options
+        logger.info("\n--- Example 3: Translation with Advanced Formatting ---")
+        
+        # Example showing different text transformations
+        format_options = ['normal', 'uppercase', 'friendly']
+        
+        for fmt in format_options:
+            logger.info(f"\nProcessing with {fmt} formatting...")
             
-            for model_id in models_to_run:
-                try:
-                    result = await translate_text(
-                        text=text,
-                        source_lang="English",
-                        target_lang="Spanish",
-                        model_id=model_id,
-                        api_keys=api_keys,
-                        custom_template=custom_template,
-                        field_mapping=field_mapping
-                    )
-                    
-                    logger.info(f"[{model_id}] Custom template translation: {result}")
-                except Exception as e:
-                    logger.error(f"Error with custom template translation using {model_id}: {str(e)}")
-        
-        # 3. Batch translation example
-        logger.info("\n--- Example 3: Batch Translation ---")
-        
-        batch_items = [
-            {"text": text, "source_lang": "English", "target_lang": "Spanish"}
-            for text in texts
-        ]
-        
-        model_id = models_to_run[0]  # Use first model for batch example
-        
-        try:
-            batch_results = await process_batch(
-                items=batch_items,
-                model_id=model_id,
-                api_keys=api_keys,
-                templates=default_templates
+            def make_transform(format_type):
+                def transform(input_dict):
+                    text = input_dict['text']
+                    if format_type == 'uppercase':
+                        text = text.upper()
+                    elif format_type == 'friendly':
+                        text = f"Hey! Here's what I'd like to translate: {text}"
+                    return {'input_text': text}
+                return transform
+            
+            batch_results = await framework.process_batch_with_template(
+                inputs=batch_texts[:1],  # Just use first text for demonstration
+                model_id="sonar-pro",
+                template=template_manager.get_template("custom_translate"),
+                global_vars={
+                    'input_language': 'English',
+                    'output_language': 'Spanish',
+                    'preserve_style': 'yes'
+                },
+                transform_input=make_transform(fmt)
             )
             
-            logger.info(f"Batch translation results with {model_id}:")
             for i, result in enumerate(batch_results):
-                logger.info(f"  Text {i+1}: {result.get('response', '')}")
-        except Exception as e:
-            logger.error(f"Error processing batch with {model_id}: {str(e)}")
-
+                logger.info(f"Original ({fmt}): {batch_texts[i]['text']}")
+                logger.info(f"Translation: {result.get('response', 'Error')}")
+            
     except Exception as e:
         logger.error(f"Application error: {str(e)}")
         raise
