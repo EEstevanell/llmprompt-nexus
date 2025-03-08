@@ -13,9 +13,9 @@ import asyncio
 from pathlib import Path
 import pandas as pd
 from typing import Dict, List, Optional, Any, Union
-from src.core.client_factory import ClientFactory
+from src.core.client_factory import create_client
 from src.processors.base import BaseProcessor, BatchVariableProvider, SimpleBatchVariableProvider
-from src.processors.factory import ProcessorFactory
+from src.processors.factory import create_processor
 from src.models.model_config import ModelConfig
 from src.models.registry import registry
 from src.utils.logger import get_logger, VerboseLevel
@@ -57,88 +57,126 @@ class UnifiedLLM:
         Args:
             api_keys: Dictionary mapping provider names to API keys
         """
-        self._validate_api_keys(api_keys)
         self.api_keys = api_keys
-        self.client_factory = ClientFactory(api_keys)
-        self.processor_factory = ProcessorFactory()
-        logger.info("UnifiedLLM framework initialized")
+        self.template_manager = get_default_template_manager()
     
-    def _validate_api_keys(self, api_keys: Dict[str, Optional[str]]) -> None:
-        """Validate that required API keys are present based on available providers."""
-        if not api_keys:
-            raise ValueError("No API keys provided")
-        
-        # Get list of providers from registry
-        providers = registry.list_providers()
-        missing_keys = [provider for provider in providers if provider in api_keys and not api_keys[provider]]
-        
-        if missing_keys:
-            logger.warning(f"Missing API keys for providers: {', '.join(missing_keys)}")
+    def get_client(self, api_name: str):
+        """Get or create an API client instance."""
+        if api_name not in self.api_keys:
+            raise ValueError(f"No API key provided for {api_name}")
+        return create_client(api_name, self.api_keys[api_name])
     
-    def get_model_configs(self, models_to_run: List[str]) -> List[ModelConfig]:
-        """
-        Validate models and return their configurations.
+    async def generate(
+        self,
+        prompt: str,
+        model_id: str,
+        **kwargs
+    ) -> Dict[str, Any]:
+        """Generate a response using a specific model."""
+        model_config = registry.get_model(model_id)
+        client = self.get_client(model_config.provider)
+        processor = create_processor(client, model_config)
         
-        Args:
-            models_to_run: List of model IDs to validate
+        return await processor.process_item({
+            'prompt': prompt,
+            'model': model_config.name,
+            **kwargs
+        })
+    
+    async def generate_batch(
+        self,
+        prompts: List[str],
+        model_id: str,
+        **kwargs
+    ) -> List[Dict[str, Any]]:
+        """Generate responses for multiple prompts in parallel."""
+        model_config = registry.get_model(model_id)
+        client = self.get_client(model_config.provider)
+        processor = create_processor(client, model_config)
+        
+        # Create batch items
+        items = [
+            {'prompt': prompt, 'model': model_config.name, **kwargs}
+            for prompt in prompts
+        ]
+        
+        # Process batch using client's parallel processing
+        return await processor.process_batch(items, model_config.name)
+    
+    async def process_with_template(
+        self,
+        input_data: Dict[str, Any],
+        model_id: str,
+        template: Template,
+        global_vars: Optional[Dict[str, Any]] = None,
+        transform_input: Optional[callable] = None
+    ) -> Dict[str, Any]:
+        """Process a single input using a template."""
+        # Transform input if needed
+        if transform_input:
+            variables = transform_input(input_data)
+        else:
+            variables = input_data
             
-        Returns:
-            List of validated ModelConfig instances
+        # Add global variables
+        if global_vars:
+            variables.update(global_vars)
             
-        Raises:
-            ValueError: If a model ID is invalid or its provider's API key is missing
-        """
-        model_configs = []
-        for model_id in models_to_run:
-            try:
-                # The registry.get_model already validates if the model exists
-                model_config = registry.get_model(model_id)
+        # Render template
+        prompt = template.render(variables)
+        
+        # Generate response
+        return await self.generate(prompt, model_id)
+    
+    async def process_batch_with_template(
+        self,
+        inputs: List[Dict[str, Any]],
+        model_id: str,
+        template: Template,
+        global_vars: Optional[Dict[str, Any]] = None,
+        transform_input: Optional[callable] = None
+    ) -> List[Dict[str, Any]]:
+        """Process multiple inputs using a template in parallel."""
+        # Transform inputs and prepare prompts
+        prompts = []
+        for input_data in inputs:
+            # Transform input if needed
+            if transform_input:
+                variables = transform_input(input_data)
+            else:
+                variables = input_data.copy()
                 
-                # Make sure we have the API key for this model's provider
-                if model_config.provider not in self.api_keys or not self.api_keys[model_config.provider]:
-                    raise ValueError(f"Missing API key for provider '{model_config.provider}' required by model '{model_id}'")
+            # Add global variables
+            if global_vars:
+                variables.update(global_vars)
                 
-                model_configs.append(model_config)
-            except Exception as e:
-                logger.error(f"Error validating model {model_id}: {str(e)}")
-                raise
-        return model_configs
+            # Render template
+            prompt = template.render(variables)
+            prompts.append(prompt)
+        
+        # Generate responses in parallel
+        return await self.generate_batch(prompts, model_id)
     
     async def translate(
         self,
         text: str,
         source_lang: str,
         target_lang: str,
-        model_id: str
+        model_id: str,
+        **kwargs
     ) -> str:
-        """
-        High-level method to translate text using the specified model with default translation template.
-        For custom translation templates, use run_with_model instead.
+        """Translate text using a language model."""
+        template = self.template_manager.get_template("translate")
         
-        Args:
-            text (str): The text to translate
-            source_lang (str): Source language code (e.g., 'en')
-            target_lang (str): Target language code (e.g., 'es')
-            model_id (str): The model ID to use for translation
-            
-        Returns:
-            str: The translated text
-        """
-        # Always use default translation template
-        template_manager = get_default_template_manager()
-        template = template_manager.get_template('translate')
-        
-        # Create input data with standard translation variables
-        input_data = {
-            'text': text,
-            'source_lang': source_lang,
-            'target_lang': target_lang
-        }
-        
-        result = await self.run_with_model(
-            input_data=input_data,
+        result = await self.process_with_template(
+            input_data={'text': text},
             model_id=model_id,
-            template=template
+            template=template,
+            global_vars={
+                'source_language': source_lang,
+                'target_language': target_lang
+            },
+            **kwargs
         )
         
         return result.get('response', '')
@@ -211,9 +249,8 @@ class UnifiedLLM:
             logger.info(f"Read {len(df)} rows from {file_path}")
 
             # Get appropriate client and processor
-            client = self.client_factory.get_client(model_config.api)
-            processor = self.processor_factory.get_processor(
-                model_config.api, 
+            client = self.get_client(model_config.api)
+            processor = create_processor(
                 client, 
                 model_config,
                 template
@@ -412,9 +449,8 @@ class UnifiedLLM:
                 }
         
         # Get client and processor
-        client = self.client_factory.get_client(model_config.api)
-        processor = self.processor_factory.get_processor(
-            model_config.api,
+        client = self.get_client(model_config.api)
+        processor = create_processor(
             client,
             model_config,
             template

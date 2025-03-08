@@ -10,19 +10,16 @@ logger = get_logger(__name__)
 class RateLimit:
     """Configuration for rate limits of a model."""
     rpm: Optional[int] = None  # Requests per minute
-    tpm: Optional[int] = None  # Tokens per minute
-    calls: Optional[int] = None  # Specific calls (for batch operations)
     period: Optional[int] = None  # Period in seconds
 
 @dataclass
 class ModelConfig:
     """Configuration for a language model."""
+    id: str
     name: str
-    provider: str  # e.g., "openai", "perplexity"
-    description: str = ""
-    max_tokens: int = 4096
-    rate_limits: Optional[Dict[str, Any]] = None
+    description: Optional[str] = None
     parameters: Optional[Dict[str, Any]] = None
+    rate_limits: Optional[Dict[str, int]] = None  # Rate limits (rpm)
     
     def __post_init__(self):
         """Validate configuration after initialization."""

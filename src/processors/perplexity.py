@@ -2,7 +2,6 @@ from typing import Dict, List, Any, Optional
 from src.clients.base import BaseClient
 from src.models.model_config import ModelConfig
 from src.processors.base import BaseProcessor
-from src.templates.base import Template
 from src.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -16,37 +15,36 @@ class PerplexityProcessor(BaseProcessor):
         self.model_config = model_config
         logger.debug(f"Initialized Perplexity processor for model {model_config.id}")
         
-    async def process_item(self, item: Dict) -> Dict[str, Any]:
-        """Process a single item."""
+    async def process_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
+        """Process a single item using Perplexity's API."""
         try:
-            prompt = self._format_prompt(item)
-            logger.debug(f"Sending request to Perplexity API using model {self.model_config.model_name}")
+            prompt = self._prepare_prompt(item)
+            model = item.get('model', 'sonar')
             
-            # Extract parameters from model config
-            params = {}
-            if self.model_config.parameters:
-                params = self.model_config.parameters.copy()
+            # Pass through any additional parameters
+            kwargs = {k: v for k, v in item.items() 
+                     if k not in ('prompt', 'model')}
             
-            # Set default temperature if not specified
-            if "temperature" not in params:
-                params["temperature"] = 0.7
-                
-            # Apply any other parameters that might be specific to this request
-            if "top_p" not in params and self.model_config.parameters and "top_p" in self.model_config.parameters:
-                params["top_p"] = self.model_config.parameters["top_p"]
+            result = await self.client.generate(prompt, model, **kwargs)
+            return self._post_process_result(result)
             
-            response = await self.client.generate(
-                prompt=prompt,
-                model=self.model_config.model_name,
-                **params
-            )
-            
-            logger.debug("Received response from Perplexity API")
-            return {'response': response.get('response', ''), 'model': self.model_config.id}
         except Exception as e:
-            logger.error(f"Error in Perplexity process_item: {str(e)}")
-            raise
-        
+            logger.error(f"Error processing item: {str(e)}")
+            return {
+                "error": str(e),
+                "model": model
+            }
+    
+    def _prepare_prompt(self, item: Dict[str, Any]) -> str:
+        """Extract or format the prompt from the item."""
+        if isinstance(item.get('prompt'), str):
+            return item['prompt']
+        elif isinstance(item.get('messages'), list):
+            # Handle message-style prompts
+            return item['messages'][-1]['content']
+        else:
+            raise ValueError("Item must contain either 'prompt' or 'messages'")
+    
     async def process_batch(self, items: List[Dict]) -> List[Dict[str, Any]]:
         """Process multiple items as a batch."""
         logger.warning("Batch processing not supported for Perplexity API, falling back to sequential processing")

@@ -15,6 +15,32 @@ from src.templates.defaults import get_template_manager, render_template
 
 logger = get_logger(__name__)
 
+async def process_parallel_batch(framework: UnifiedLLM, batch_texts: List[Dict], model_id: str, 
+                               template: Template, global_vars: Dict[str, Any], 
+                               transform_input: callable, max_concurrent: int = 5) -> List[Dict[str, Any]]:
+    """Process batch items in parallel with rate limiting."""
+    semaphore = asyncio.Semaphore(max_concurrent)
+    results = [None] * len(batch_texts)
+    
+    async def process_item(index: int, item: Dict):
+        async with semaphore:
+            try:
+                result = await framework.process_batch_with_template(
+                    inputs=[item],
+                    model_id=model_id,
+                    template=template,
+                    global_vars=global_vars,
+                    transform_input=transform_input
+                )
+                results[index] = result[0]
+            except Exception as e:
+                logger.error(f"Error processing batch item {index}: {str(e)}")
+                results[index] = {"error": str(e)}
+    
+    tasks = [process_item(i, item) for i, item in enumerate(batch_texts)]
+    await asyncio.gather(*tasks)
+    return results
+
 async def main():
     try:
         # Load API keys from environment variables
@@ -40,24 +66,30 @@ async def main():
         
         # 1. Simple translation using built-in templates
         logger.info("\n--- Example 1: Simple Translation with Built-in Templates ---")
+        tasks = []
         for text in texts:
             logger.info(f"Original text (English): {text}")
             
             for model_id in models_to_run:
-                try:
-                    result = await framework.translate(
-                        text=text,
-                        source_lang="English",
-                        target_lang="Spanish",
-                        model_id=model_id
-                    )
-                    
-                    logger.info(f"[{model_id}] Translation to Spanish: {result}")
-                except Exception as e:
-                    logger.error(f"Error translating with {model_id}: {str(e)}")
+                async def translate_text():
+                    try:
+                        result = await framework.translate(
+                            text=text,
+                            source_lang="English",
+                            target_lang="Spanish",
+                            model_id=model_id
+                        )
+                        logger.info(f"[{model_id}] Translation to Spanish: {result}")
+                    except Exception as e:
+                        logger.error(f"Error translating with {model_id}: {str(e)}")
+                
+                tasks.append(translate_text())
         
-        # 2. Translation with custom template using simplified batch interface
-        logger.info("\n--- Example 2: Translation with Custom Template (Simple Batch) ---")
+        # Run translations in parallel
+        await asyncio.gather(*tasks)
+
+        # 2. Translation with custom template using parallel batch processing
+        logger.info("\n--- Example 2: Translation with Custom Template (Parallel Batch) ---")
         
         # Register a custom template with different variable names
         custom_template = """
@@ -92,9 +124,10 @@ async def main():
                 'input_text': input_dict['text']
             }
         
-        # Process batch with global variables and transform function
-        batch_results = await framework.process_batch_with_template(
-            inputs=batch_texts,
+        # Process batch in parallel with rate limiting
+        batch_results = await process_parallel_batch(
+            framework=framework,
+            batch_texts=batch_texts,
             model_id="sonar-pro",
             template=template_manager.get_template("custom_translate"),
             global_vars={
@@ -102,7 +135,8 @@ async def main():
                 'output_language': 'Spanish',
                 'preserve_style': 'yes'
             },
-            transform_input=transform_input
+            transform_input=transform_input,
+            max_concurrent=5  # Adjust based on rate limits
         )
         
         for i, result in enumerate(batch_results):
@@ -113,37 +147,43 @@ async def main():
         # 3. Translation with advanced formatting options
         logger.info("\n--- Example 3: Translation with Advanced Formatting ---")
         
-        # Example showing different text transformations
-        format_options = ['normal', 'uppercase', 'friendly']
+        format_tasks = []
+        for fmt in ['normal', 'uppercase', 'friendly']:
+            async def process_format(format_type):
+                logger.info(f"\nProcessing with {format_type} formatting...")
+                
+                def make_transform(f_type):
+                    def transform(input_dict):
+                        text = input_dict['text']
+                        if f_type == 'uppercase':
+                            text = text.upper()
+                        elif f_type == 'friendly':
+                            text = f"Hey! Here's what I'd like to translate: {text}"
+                        return {'input_text': text}
+                    return transform
+                
+                results = await process_parallel_batch(
+                    framework=framework,
+                    batch_texts=batch_texts[:1],
+                    model_id="sonar-pro",
+                    template=template_manager.get_template("custom_translate"),
+                    global_vars={
+                        'input_language': 'English',
+                        'output_language': 'Spanish',
+                        'preserve_style': 'yes'
+                    },
+                    transform_input=make_transform(format_type),
+                    max_concurrent=3
+                )
+                
+                for i, result in enumerate(results):
+                    logger.info(f"Original ({format_type}): {batch_texts[i]['text']}")
+                    logger.info(f"Translation: {result.get('response', 'Error')}")
+            
+            format_tasks.append(process_format(fmt))
         
-        for fmt in format_options:
-            logger.info(f"\nProcessing with {fmt} formatting...")
-            
-            def make_transform(format_type):
-                def transform(input_dict):
-                    text = input_dict['text']
-                    if format_type == 'uppercase':
-                        text = text.upper()
-                    elif format_type == 'friendly':
-                        text = f"Hey! Here's what I'd like to translate: {text}"
-                    return {'input_text': text}
-                return transform
-            
-            batch_results = await framework.process_batch_with_template(
-                inputs=batch_texts[:1],  # Just use first text for demonstration
-                model_id="sonar-pro",
-                template=template_manager.get_template("custom_translate"),
-                global_vars={
-                    'input_language': 'English',
-                    'output_language': 'Spanish',
-                    'preserve_style': 'yes'
-                },
-                transform_input=make_transform(fmt)
-            )
-            
-            for i, result in enumerate(batch_results):
-                logger.info(f"Original ({fmt}): {batch_texts[i]['text']}")
-                logger.info(f"Translation: {result.get('response', 'Error')}")
+        # Run all format variations in parallel
+        await asyncio.gather(*format_tasks)
             
     except Exception as e:
         logger.error(f"Application error: {str(e)}")
