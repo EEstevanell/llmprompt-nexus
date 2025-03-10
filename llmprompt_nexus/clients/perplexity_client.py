@@ -10,7 +10,7 @@ from llmprompt_nexus.utils.logger import get_logger
 logger = get_logger(__name__)
 
 class PerplexityClient(BaseClient):
-    """Client for Perplexity AI API with parallel processing support."""
+    """Client for Perplexity AI API with enhanced rate limiting."""
     
     API_URL = "https://api.perplexity.ai/chat/completions"
     
@@ -20,15 +20,10 @@ class PerplexityClient(BaseClient):
             "Authorization": f"Bearer {api_key}",
             "Content-Type": "application/json"
         }
+        self._request_lock = asyncio.Lock()
     
     async def generate(self, prompt: Union[str, List[Dict[str, str]]], model: str, **kwargs) -> Dict[str, Any]:
-        """Generate a response for a single prompt.
-        
-        Args:
-            prompt: Either a string prompt or a list of message dictionaries
-            model: The model to use for generation
-            **kwargs: Additional parameters to pass to the API
-        """
+        """Generate a response with enhanced rate limiting."""
         try:
             # Handle different prompt types
             if isinstance(prompt, str):
@@ -44,39 +39,49 @@ class PerplexityClient(BaseClient):
             request_params = {
                 "model": model,
                 "messages": messages,
-                "stream": False  # Ensure streaming is disabled
+                "stream": False
             }
             request_params.update(kwargs)
             
-            async with httpx.AsyncClient() as client:
-                response = await client.post(
-                    self.API_URL,
-                    headers=self.headers,
-                    json=request_params,
-                    timeout=60.0
-                )
+            rate_limiter = self.get_rate_limiter(model)
+            
+            # Use a lock to prevent race conditions in rate limiting
+            async with self._request_lock:
+                # Wait for rate limit clearance
+                await rate_limiter.acquire()
                 
-                if response.status_code != 200:
-                    error_msg = f"Perplexity API error: {response.status_code} - {response.text}"
-                    logger.error(error_msg)
-                    return {
-                        "error": error_msg,
-                        "model": model
-                    }
-                
-                result = response.json()
-                response_text = result["choices"][0]["message"]["content"]
-                
-                return {
-                    "response": response_text,
-                    "model": model,
-                    "usage": result.get("usage", {})
-                }
-                
+                try:
+                    async with httpx.AsyncClient() as client:
+                        response = await client.post(
+                            self.API_URL,
+                            headers=self.headers,
+                            json=request_params,
+                            timeout=30.0
+                        )
+                        
+                        if response.status_code == 429:
+                            rate_limiter.record_failure(is_429=True)
+                            retry_after = int(response.headers.get('Retry-After', 60))
+                            raise Exception(f"Rate limit exceeded. Retry after {retry_after}s")
+                            
+                        response.raise_for_status()
+                        return response.json()
+                        
+                except httpx.HTTPStatusError as e:
+                    if e.response.status_code == 429:
+                        rate_limiter.record_failure(is_429=True)
+                    else:
+                        rate_limiter.record_failure()
+                    raise
+                    
         except Exception as e:
-            error_msg = f"Error generating response: {str(e)}"
-            logger.error(error_msg)
-            return {
-                "error": error_msg,
-                "model": model
-            }
+            logger.error(f"Perplexity API error: {e}", exc_info=True)
+            raise
+            
+    async def generate_batch(self, prompts: List[str], model: str, **kwargs) -> List[Dict[str, Any]]:
+        """Process multiple prompts with automatic batching and rate limiting.
+        
+        This implementation uses the BaseClient's default batch processing logic
+        which now includes proper rate limiting and retries.
+        """
+        return await super().generate_batch(prompts, model, **kwargs)

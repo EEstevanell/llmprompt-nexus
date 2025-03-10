@@ -72,7 +72,7 @@ llm = NexusManager({
 
 ```python
 # Simple translation
-result = await llm.run_with_model(
+result = await llm.generate(
     input_data={
         "text": "Hello world",
         "source_language": "English",
@@ -83,7 +83,7 @@ result = await llm.run_with_model(
 )
 
 # Text classification
-result = await llm.run_with_model(
+result = await llm.generate(
     input_data={
         "text": "I love this product!",
         "categories": ["positive", "negative", "neutral"]
@@ -108,7 +108,6 @@ templates:
       Provide a technical answer based on the context.
     description: "Technical Q&A template"
     system_message: "You are a technical expert."
-    required_variables: ["context", "question"]
 ```
 
 2. Using Python dictionaries:
@@ -125,14 +124,12 @@ custom_template = {
     - Best practices followed
     - Suggested improvements
     """,
-    "name": "code_review",  # Optional
     "description": "Template for code review",  # Optional
     "system_message": "You are an expert code reviewer.",  # Optional
-    "required_variables": ["language", "code"]  # Optional
 }
 
 # Use the custom template
-result = await llm.run_with_model(
+result = await llm.generate(
     input_data={
         "language": "Python",
         "code": "def hello(): print('world')"

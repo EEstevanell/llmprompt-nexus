@@ -24,7 +24,8 @@ async def translation_example(framework: NexusManager):
         model_id="sonar",
         template_name="translation"  # Will load from translation.yaml
     )
-    logger.info(f"Translation Result: {result.get('response', 'Error')}")
+    logger.debug(f"Original: Hello world")
+    logger.debug(f"Translation Result: {result.get('response', 'Error')}")
 
 async def summarization_example(framework: NexusManager):
     """Demonstrate summarization template usage."""
@@ -41,7 +42,8 @@ async def summarization_example(framework: NexusManager):
         model_id="sonar",
         template_name="summarization"  # Will load from summarization.yaml
     )
-    logger.info(f"Summarization Result: {result.get('response', 'Error')}")
+    logger.debug(f"Original text: {input_data['text']}")
+    logger.debug(f"Summarization Result: {result.get('response', 'Error')}")
 
 async def classification_example(framework: NexusManager):
     """Demonstrate text classification template usage."""
@@ -55,7 +57,8 @@ async def classification_example(framework: NexusManager):
         model_id="sonar",
         template_name="classification"  # Will load from classification.yaml
     )
-    logger.info(f"Classification Result: {result.get('response', 'Error')}")
+    logger.debug(f"Text: {input_data['text']}")
+    logger.debug(f"Classification Result: {result.get('response', 'Error')}")
 
 async def qa_example(framework: NexusManager):
     """Demonstrate question answering template usage."""
@@ -73,7 +76,9 @@ async def qa_example(framework: NexusManager):
         model_id="sonar",
         template_name="qa"  # Will load from qa.yaml
     )
-    logger.info(f"Q&A Result: {result.get('response', 'Error')}")
+    logger.debug(f"Context: {input_data['context']}")
+    logger.debug(f"Question: {input_data['question']}")
+    logger.debug(f"Q&A Result: {result.get('response', 'Error')}")
 
 async def intent_example(framework: NexusManager):
     """Demonstrate intent detection template usage."""
@@ -87,7 +92,8 @@ async def intent_example(framework: NexusManager):
         model_id="sonar",
         template_name="intent"  # Will load from intent.yaml
     )
-    logger.info(f"Intent Result: {result.get('response', 'Error')}")
+    logger.debug(f"Text: {input_data['text']}")
+    logger.debug(f"Intent Result: {result.get('response', 'Error')}")
 
 async def main():
     """Run template usage examples."""

@@ -1,7 +1,7 @@
 # src/utils/logging.py
 import logging
 from enum import IntEnum
-from typing import Optional
+from typing import Optional, Union
 import sys
 
 class VerboseLevel(IntEnum):
@@ -36,6 +36,35 @@ class CustomFormatter(logging.Formatter):
         record.levelname = f'{color}{record.levelname}{self.RESET}'
         record.msg = f'{color}{record.msg}{self.RESET}'
         return super().format(record)
+
+_framework_logger = None
+
+def configure_logger(level: Union[str, int] = "INFO") -> None:
+    """
+    Configure the framework-wide logger with the specified log level.
+    This should be called once when initializing NexusManager.
+    
+    Args:
+        level: Logging level as string or integer (e.g., "INFO" or logging.INFO)
+    """
+    global _framework_logger
+    
+    # Convert string level to logging constant if needed
+    if isinstance(level, str):
+        level = getattr(logging, level.upper())
+    
+    # Create logger if it doesn't exist
+    if _framework_logger is None:
+        _framework_logger = logging.getLogger("llmprompt_nexus")
+        handler = logging.StreamHandler()
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        )
+        handler.setFormatter(formatter)
+        _framework_logger.addHandler(handler)
+    
+    # Set level for the framework logger and all its children
+    _framework_logger.setLevel(level)
 
 def get_logger(
     name: str,

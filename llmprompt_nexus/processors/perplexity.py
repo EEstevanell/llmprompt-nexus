@@ -8,13 +8,23 @@ from llmprompt_nexus.utils.logger import get_logger
 logger = get_logger(__name__)
 
 class PerplexityProcessor(BaseProcessor):
-    """Processor for Perplexity models."""
+    """Processor for Perplexity models with improved rate limit handling."""
     
     def __init__(self, client: BaseClient, model_config: ModelConfig, template: Optional[Template] = None):
         self.client = client
         self.model_config = model_config
         self.template = template
+        self._max_retries = 5
+        self._max_concurrent = None
+        self._batch_size = None
         logger.debug(f"Initialized Perplexity processor for model {model_config.name}")
+    
+    def configure(self, max_retries: int = 5, max_concurrent: Optional[int] = None, 
+                 batch_size: Optional[int] = None) -> None:
+        """Configure processing parameters."""
+        self._max_retries = max_retries
+        self._max_concurrent = max_concurrent
+        self._batch_size = batch_size
     
     def _prepare_prompt(self, item: Dict[str, Any]) -> Union[str, List[Dict[str, str]]]:
         """Extract or format the prompt from the item."""
@@ -36,52 +46,57 @@ class PerplexityProcessor(BaseProcessor):
         else:
             raise ValueError("Item must contain either 'prompt', 'messages', or use a template")
     
-    async def process_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
-        """Process a single item using Perplexity's API."""
+    async def process_item(self, item: Dict[str, Any], 
+                         global_vars: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Process a single translation item with retry handling."""
         try:
-            # Get prompt or messages from template or input
-            prompt = self._prepare_prompt(item)
-            model = self.model_config.name
-            
-            # Pass through any additional parameters except those we handle
-            kwargs = {k: v for k, v in item.items() 
-                     if k not in ('prompt', 'model', 'messages', 'system_message')}
-            
-            # If prompt is a list of messages, pass directly
-            if isinstance(prompt, list):
-                result = await self.client.generate(
-                    prompt=prompt,
-                    model=model,
-                    **kwargs
-                )
+            # Merge global variables if provided
+            if global_vars:
+                context = {**item, **global_vars}
             else:
-                # For string prompts, pass system message separately if available
-                system_message = None
-                if self.template and self.template.system_message:
-                    system_message = self.template.system_message
-                elif 'system_message' in item:
-                    system_message = item['system_message']
-                
-                result = await self.client.generate(
-                    prompt=prompt,
-                    model=model,
-                    system_message=system_message,
-                    **kwargs
-                )
+                context = item.copy()
+
+            # Get formatted messages
+            messages = self._prepare_prompt(context)
             
-            return self._post_process_result(result)
+            # Generate with built-in retry
+            result = await self.client.generate(
+                prompt=messages,
+                model=self.model_config.name
+            )
+            
+            # Extract the translation from the response
+            if isinstance(result, dict) and 'choices' in result:
+                translation = result['choices'][0]['message']['content']
+            else:
+                translation = str(result)
+            
+            return {
+                'response': translation,
+                'status': 'completed',
+                'model': self.model_config.name
+            }
             
         except Exception as e:
             logger.error(f"Error processing item: {str(e)}")
             return {
-                "error": str(e),
-                "model": self.model_config.name
+                'error': str(e),
+                'status': 'failed',
+                'model': self.model_config.name
             }
     
-    async def process_batch(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Process multiple items sequentially (Perplexity doesn't support batch processing)."""
-        results = []
-        for item in items:
-            result = await self.process_item(item)
-            results.append(result)
-        return results
+    async def process_batch(self, items: List[Dict[str, Any]], **kwargs) -> List[Dict[str, Any]]:
+        """Process a batch of items with improved rate limit handling."""
+        # Update processing config if provided in kwargs
+        if 'max_retries' in kwargs:
+            self._max_retries = kwargs['max_retries']
+        if 'max_concurrent' in kwargs:
+            self._max_concurrent = kwargs['max_concurrent']
+            
+        # Use parent's implementation with our config
+        return await super().process_batch(
+            items,
+            max_retries=self._max_retries,
+            max_concurrent=self._max_concurrent,
+            **kwargs
+        )

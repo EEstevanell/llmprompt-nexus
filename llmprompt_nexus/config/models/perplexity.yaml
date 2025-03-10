@@ -5,15 +5,24 @@ models:
     description: "Sonar small online model"
     max_tokens: 1024
     rate_limits:
-      rpm: 60
+      rpm: 50
     parameters:
       temperature: 0.7
-      
+  
   - name: sonar-pro
     provider: perplexity
     description: "Sonar medium online model"
     max_tokens: 4096
     rate_limits:
-      rpm: 60
+      rpm: 50
+    parameters:
+      temperature: 0.7
+      
+  - name: r1-1776
+    provider: perplexity
+    description: "Perplexity offline model"
+    max_tokens: 4096
+    rate_limits:
+      rpm: 50
     parameters:
       temperature: 0.7

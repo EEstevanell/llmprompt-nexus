@@ -28,7 +28,7 @@ async def demonstrate_basic_batch():
     
     # Initialize framework with API keys
     api_keys = {
-        "openai": os.getenv("OPENAI_API_KEY", "dummy-key-for-example")
+        "perplexity": os.getenv("OPENAI_API_KEY", "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")
     }
     
     framework = NexusManager(api_keys)
@@ -48,26 +48,26 @@ async def demonstrate_basic_batch():
     ]
     
     # Display information about model rate limiting
-    model_id = "gpt-3.5-turbo"
+    model_id = "sonar"
     model_config = model_registry.get_model(model_id)
     client = framework.get_client(model_config.provider)
     rate_limiter = client.get_rate_limiter(model_config.name)
     usage = rate_limiter.get_current_usage()
     
-    logger.info(f"Model: {model_id}")
-    logger.info(f"Rate limit: {usage['max_calls']} calls per {usage['period']} seconds")
-    logger.info(f"Current usage: {usage['calls']} calls")
-    logger.info(f"Batch size: {len(prompts)} prompts")
+    logger.debug(f"Model: {model_id}")
+    logger.debug(f"Rate limit: {usage['max_calls']} calls per {usage['period']} seconds")
+    logger.debug(f"Current usage: {usage['calls']} calls")
+    logger.debug(f"Batch size: {len(prompts)} prompts")
     
     # Process batch with auto queue management
     start_time = time.time()
     logger.info("\nStarting batch processing...")
     
-    # Using the new simplified API - we can pass string prompts directly
-    # The default template will be used automatically
-    results = await framework.process_batch(
+    # Using the simplified API - progress tracking is handled internally by BatchProgressTracker
+    results = await framework.generate_batch(
         inputs=prompts,
-        model_id=model_id
+        model_id=model_id,
+        silent=False  # This ensures the progress bar is displayed
     )
     
     end_time = time.time()
@@ -115,23 +115,23 @@ async def demonstrate_template_batch():
     ]
     
     # Display information about the batch
-    model_id = "gpt-3.5-turbo"
+    model_id = "sonar"
     model_config = model_registry.get_model(model_id)
     client = framework.get_client(model_config.provider)
     rate_limiter = client.get_rate_limiter(model_config.name)
     usage = rate_limiter.get_current_usage()
     
-    logger.info(f"Model: {model_id}")
-    logger.info(f"Rate limit: {usage['max_calls']} calls per {usage['period']} seconds")
-    logger.info(f"Current usage: {usage['calls']} calls")
-    logger.info(f"Batch size: {len(batch_inputs)} items")
+    logger.debug(f"Model: {model_id}")
+    logger.debug(f"Rate limit: {usage['max_calls']} calls per {usage['period']} seconds")
+    logger.debug(f"Current usage: {usage['calls']} calls")
+    logger.debug(f"Batch size: {len(batch_inputs)} items")
     
     # Process batch with template
     start_time = time.time()
     logger.info("\nStarting batch processing with template...")
     
     # Using the new simplified API - we can provide the custom template configuration directly
-    results = await framework.process_batch(
+    results = await framework.generate_batch(
         inputs=batch_inputs,
         model_id=model_id,
         template_config=batch_translation_template
@@ -167,7 +167,7 @@ async def demonstrate_file_processing():
         logger.info(f"Created test file: {file_path}")
     
     # Get model information
-    model_id = "gpt-3.5-turbo"
+    model_id = "sonar"
     
     # Create template configuration
     template_config = {
@@ -181,7 +181,7 @@ async def demonstrate_file_processing():
     client = framework.get_client(model_registry.get_model(model_id).provider)
     rate_limiter = client.get_rate_limiter(model_registry.get_model(model_id).name)
     usage = rate_limiter.get_current_usage()
-    logger.info(f"Rate limit: {usage['max_calls']} calls per {usage['period']} seconds")
+    logger.debug(f"Rate limit: {usage['max_calls']} calls per {usage['period']} seconds")
     
     # Process file with auto batching
     start_time = time.time()
@@ -212,14 +212,14 @@ async def demonstrate_single_processing():
     }
     
     framework = NexusManager(api_keys)
-    model_id = "gpt-3.5-turbo"
+    model_id = "sonar"
     
     # Example 1: Simple string prompt (will use default template)
     logger.info("\nExample 1: Simple string prompt")
     simple_prompt = "Explain the concept of neural networks in 3 sentences."
     
     start_time = time.time()
-    result1 = await framework.process(
+    result1 = await framework.generate(
         input_data=simple_prompt,
         model_id=model_id
     )
@@ -237,7 +237,7 @@ async def demonstrate_single_processing():
     }
     
     start_time = time.time()
-    result2 = await framework.process(
+    result2 = await framework.generate(
         input_data={
             "concept": "quantum computing", 
             "length": "3-sentence", 
@@ -255,10 +255,10 @@ async def demonstrate_single_processing():
 async def main():
     """Run batch processing examples."""
     try:
-        await demonstrate_single_processing()
         await demonstrate_basic_batch()
-        await demonstrate_template_batch()
-        await demonstrate_file_processing()
+        # await demonstrate_single_processing()
+        # await demonstrate_template_batch()
+        # await demonstrate_file_processing()
     except Exception as e:
         logger.error(f"Error running batch examples: {str(e)}")
         raise

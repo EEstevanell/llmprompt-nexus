@@ -1,7 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import Dict, List, Any, Optional
 import asyncio
-import httpx
 
 from llmprompt_nexus.models.registry import registry
 from llmprompt_nexus.rate_limiting.limiter import RateLimiter
