@@ -19,7 +19,7 @@ from llmprompt_nexus.processors.base import BaseProcessor
 from llmprompt_nexus.processors.factory import create_processor
 from llmprompt_nexus.models.model_config import ModelConfig
 from llmprompt_nexus.models.registry import registry as model_registry
-from llmprompt_nexus.templates import load_template
+from llmprompt_nexus.templates import load_template, get_template_manager
 from llmprompt_nexus.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -45,142 +45,209 @@ class NexusManager:
         if api_name not in self.api_keys:
             raise ValueError(f"No API key provided for {api_name}")
         return create_client(api_name, self.api_keys[api_name])
-    
-    async def generate(self, prompt: str, model_id: str, **kwargs) -> Dict[str, Any]:
-        """Generate a response using a specific model."""
-        model_config = model_registry.get_model(model_id)
-        client = self.get_client(model_config.provider)
-        processor = create_processor(client, model_config)
-        
-        return await processor.process_item({
-            'prompt': prompt,
-            'model': model_config.name,
-            **kwargs
-        })
-    
-    async def generate_batch(self, prompts: List[str], model_id: str, **kwargs) -> List[Dict[str, Any]]:
-        """Generate responses for multiple prompts in parallel."""
-        model_config = model_registry.get_model(model_id)
-        client = self.get_client(model_config.provider)
-        processor = create_processor(client, model_config)
-        
-        items = [{'prompt': prompt, 'model': model_config.name, **kwargs} for prompt in prompts]
-        return await processor.process_batch(items)
-    
-    async def run_with_model(
-        self,
-        input_data: Union[Dict[str, Any], List[Dict[str, Any]]],
-        model_id: str,
-        template_name: Optional[str] = None,
-        template_config: Optional[Dict[str, Any]] = None,
-        batch_mode: bool = False,
-        global_variables: Optional[Dict[str, Any]] = None
-    ) -> Union[Dict[str, Any], List[Dict[str, Any]]]:
+
+    def _prepare_input_data(self, 
+                           input_data: Union[str, Dict[str, Any]],
+                           **kwargs) -> Dict[str, Any]:
         """
-        Process input data with a specific model using an optional template.
+        Prepare input data from various formats.
+        
+        If input_data is a string, it's treated as a simple prompt.
+        If it's a dictionary, it's used as-is with any additional kwargs.
+        """
+        if isinstance(input_data, str):
+            # Handle simple string prompt
+            prepared_data = {'prompt': input_data}
+        elif isinstance(input_data, dict):
+            # Use dictionary as-is
+            prepared_data = input_data.copy()
+        else:
+            raise ValueError(f"Unsupported input type: {type(input_data)}")
+        
+        # Add any additional kwargs
+        prepared_data.update(**kwargs)
+        return prepared_data
+    
+    def _get_template(self, 
+                     template_name: Optional[str] = None,
+                     template_config: Optional[Dict[str, Any]] = None):
+        """
+        Get a template based on name or config, defaulting to the basic template.
+        """
+        if template_config:
+            # Custom template configuration provided
+            return load_template("custom_template", template_config)
+        elif template_name:
+            # Named template
+            try:
+                tm = get_template_manager(template_name)
+                return tm.get_template(template_name)
+            except Exception as e:
+                logger.warning(f"Failed to load named template '{template_name}': {str(e)}")
+                logger.warning("Falling back to default template")
+                
+        # Default template for handling simple prompts
+        try:
+            tm = get_template_manager('default')
+            return tm.get_template('default')
+        except Exception as e:
+            logger.warning(f"Failed to load default template: {str(e)}")
+            # Create an inline minimal template as last resort
+            return load_template("minimal", {
+                "template": "{prompt}",
+                "description": "Minimal inline template",
+                "system_message": "You are a helpful AI assistant."
+            })
+    
+    async def process(self, 
+                     input_data: Union[str, Dict[str, Any]],
+                     model_id: str,
+                     template_name: Optional[str] = None,
+                     template_config: Optional[Dict[str, Any]] = None,
+                     **kwargs) -> Dict[str, Any]:
+        """
+        Process a single input with a model.
         
         Args:
-            input_data: Single dictionary or list of dictionaries containing input data
+            input_data: Either a prompt string or a dictionary of input data
             model_id: The model ID to use for processing
             template_name: Optional name of template to load
             template_config: Optional template configuration dictionary
-            batch_mode: Whether to process as a batch (if input_data is a list)
-            global_variables: Optional dictionary of variables that apply to all examples
+            **kwargs: Additional parameters to pass to the processor
+            
+        Returns:
+            Dictionary containing the model's response and metadata
         """
+        # Get model configuration and client
         model_config = model_registry.get_model(model_id)
         client = self.get_client(model_config.provider)
         
-        template = None
-        if template_name or template_config:
-            template = load_template(
-                template_name or "custom_template",
-                template_config
-            )
+        # Get template (always using a template, with default as fallback)
+        template = self._get_template(template_name, template_config)
         
+        # Prepare input data
+        prepared_data = self._prepare_input_data(input_data, model=model_config.name, **kwargs)
+        
+        # Create processor with the template
         processor = create_processor(client, model_config, template)
         
-        # Handle global variables if provided
-        if global_variables:
-            if batch_mode and isinstance(input_data, list):
-                input_data = [{**global_variables, **item} for item in input_data]
-            elif not batch_mode and isinstance(input_data, dict):
-                input_data = {**global_variables, **input_data}
-        
         try:
-            if batch_mode and isinstance(input_data, list):
-                return await processor.process_batch(input_data)
-            elif not batch_mode and isinstance(input_data, dict):
-                return await processor.process_item(input_data)
-            else:
-                raise ValueError("Input data type must match batch_mode setting")
+            # Process the item
+            logger.info(f"Processing single input with model {model_id}")
+            return await processor.process_item(prepared_data)
         except Exception as e:
             logger.error(f"Error processing with model {model_id}: {str(e)}")
             raise
     
-    async def process_file(
-        self,
-        file_path: Path,
-        model_config: ModelConfig,
-        template_name: Optional[str] = None,
-        template_config: Optional[Dict[str, Any]] = None,
-        batch_mode: bool = False,
-        batch_size: int = 10
-    ) -> Path:
+    async def process_batch(self,
+                           inputs: Union[List[str], List[Dict[str, Any]]],
+                           model_id: str,
+                           template_name: Optional[str] = None,
+                           template_config: Optional[Dict[str, Any]] = None,
+                           global_vars: Optional[Dict[str, Any]] = None,
+                           **kwargs) -> List[Dict[str, Any]]:
         """
-        Process a TSV file with the specified model configuration.
+        Process multiple inputs with a model.
+        
+        The batch will be automatically managed based on model rate limits.
+        
+        Args:
+            inputs: List of prompt strings or dictionaries
+            model_id: The model ID to use for processing
+            template_name: Optional name of template to load
+            template_config: Optional template configuration dictionary
+            global_vars: Optional dictionary of variables that apply to all items in the batch
+            **kwargs: Additional parameters to pass to the processor
+            
+        Returns:
+            List of dictionaries containing the model's responses and metadata
+        """
+        if not inputs:
+            return []
+            
+        # Get model configuration and client
+        model_config = model_registry.get_model(model_id)
+        client = self.get_client(model_config.provider)
+        
+        # Get template (always using a template, with default as fallback)
+        template = self._get_template(template_name, template_config)
+        
+        # Prepare batch input data
+        batch_data = [self._prepare_input_data(item, model=model_config.name, **kwargs) 
+                     for item in inputs]
+        
+        # Create processor with the template
+        processor = create_processor(client, model_config, template)
+        
+        try:
+            # Process the batch with automatic queue management
+            logger.info(f"Processing batch of {len(inputs)} inputs with model {model_id}")
+            return await processor.process_batch(batch_data, global_vars=global_vars)
+        except Exception as e:
+            logger.error(f"Error processing batch with model {model_id}: {str(e)}")
+            raise
+    
+    async def process_file(self,
+                          file_path: Path,
+                          model_id: str,
+                          template_name: Optional[str] = None,
+                          template_config: Optional[Dict[str, Any]] = None,
+                          **kwargs) -> Path:
+        """
+        Process a TSV file with a model.
         
         Args:
             file_path: Path to the input TSV file
-            model_config: Configuration for the model to use
+            model_id: The model ID to use for processing
             template_name: Optional name of template to load
             template_config: Optional template configuration dictionary
-            batch_mode: Whether to use batch processing
-            batch_size: Size of batches when batch_mode is True
+            **kwargs: Additional parameters to pass to the processor
         
         Returns:
             Path to the output TSV file with results
         """
-        logger.info(f"Processing file {file_path} with model {model_config.id}")
+        # Get model configuration
+        model_config = model_registry.get_model(model_id)
         
-        template = None
-        if template_name or template_config:
-            template = load_template(
-                template_name or "custom_template",
-                template_config
-            )
+        logger.info(f"Processing file {file_path} with model {model_id}")
+        
+        # Get template (always using a template, with default as fallback)
+        template = self._get_template(template_name, template_config)
 
         try:
+            # Read the TSV file
             df = pd.read_csv(file_path, sep='\t')
             if df.empty:
                 raise ValueError(f"Input file {file_path} is empty")
             
             logger.info(f"Read {len(df)} rows from {file_path}")
             
+            # Get client and create processor
             client = self.get_client(model_config.provider)
             processor = create_processor(client, model_config, template)
             
-            if batch_mode:
-                for i in range(0, len(df), batch_size):
-                    batch = df.iloc[i:i+batch_size].to_dict('records')
-                    results = await processor.process_batch(batch)
-                    
-                    for j, result in enumerate(results):
-                        idx = i + j
-                        if idx < len(df):
-                            df.at[idx, 'response'] = result.get('response', '')
-                            df.at[idx, 'model'] = model_config.id
-            else:
-                for idx, row in df.iterrows():
-                    result = await processor.process_item(row.to_dict())
-                    df.at[idx, 'response'] = result.get('response', '')
-                    df.at[idx, 'model'] = model_config.id
+            # Always use batch processing for files - convert DataFrame to list of dictionaries
+            items = df.to_dict('records')
             
-            output_path = file_path.parent / f"{file_path.stem}_{model_config.id}_results.tsv"
+            # Add any additional kwargs to each item
+            for item in items:
+                item.update(**kwargs)
+            
+            # Use the smart batch processing system that automatically manages concurrency
+            results = await processor.process_batch(items)
+            
+            # Update the DataFrame with results
+            for idx, result in enumerate(results):
+                df.at[idx, 'response'] = result.get('response', '')
+                df.at[idx, 'model'] = model_id
+            
+            # Save results to a new TSV file
+            output_path = file_path.parent / f"{file_path.stem}_{model_id}_results.tsv"
             df.to_csv(output_path, sep='\t', index=False)
             logger.info(f"Results saved to {output_path}")
             
             return output_path
             
         except Exception as e:
-            logger.error(f"Error processing file {file_path}: {str(e)}")
+            logger.error(f"Error processing file {file_path} with model {model_id}: {str(e)}")
             raise

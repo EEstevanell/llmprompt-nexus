@@ -1,0 +1,4 @@
+default:
+  template: "{prompt}"
+  description: "Default template for handling simple prompt strings"
+  system_message: "You are a helpful AI assistant. Provide accurate, informative, and concise responses."

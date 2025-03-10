@@ -12,10 +12,8 @@ class OpenAIProcessor(BaseProcessor):
     """Processor for OpenAI models."""
     
     def __init__(self, client: BaseClient, model_config: ModelConfig, template: Optional[Template] = None):
-        super().__init__(template)
-        self.client = client
-        self.model_config = model_config
-        logger.debug(f"Initialized OpenAI processor for model {model_config.id}")
+        super().__init__(client, model_config, template)
+        logger.debug(f"Initialized OpenAI processor for model {model_config.name}")
         
     def _prepare_prompt(self, item: Dict[str, Any]) -> Union[str, List[Dict[str, str]]]:
         """Extract or format the prompt from the item."""
@@ -77,33 +75,6 @@ class OpenAIProcessor(BaseProcessor):
                 "error": str(e),
                 "model": self.model_config.name
             }
-            
-    async def process_batch(self, items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-        """Process multiple items in parallel."""
-        try:
-            # Process all items simultaneously
-            processed_items = []
-            for item in items:
-                messages = self._prepare_prompt(item)
-                if isinstance(messages, str):
-                    # Convert string prompt to messages format
-                    messages = [{"role": "user", "content": messages}]
-                processed_items.append({
-                    **item,
-                    'messages': messages,
-                    'model': item.get('model', self.model_config.name)
-                })
-                
-            results = await self.client.generate_batch(
-                items=processed_items,
-                model=self.model_config.name
-            )
-            
-            return [self._post_process_result(result) for result in results]
-            
-        except Exception as e:
-            logger.error(f"Error in batch processing: {str(e)}")
-            return [{
-                "error": str(e),
-                "model": self.model_config.name
-            }] * len(items)
+    
+    # We're removing the custom process_batch implementation and will use
+    # the improved queue-based implementation from BaseProcessor instead

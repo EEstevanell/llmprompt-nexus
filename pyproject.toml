@@ -1,6 +1,6 @@
 [project]
 name = "llmprompt-nexus"
-version = "0.1.0"
+version = "0.2.0"
 description = "A unified framework for interacting with various LLM providers through a consistent interface with batch processing, templating, and rate limiting."
 authors = [
     {name = "Ernesto Estevanell",email = "ernestoestevanellv@gmail.com"}
