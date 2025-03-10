@@ -183,7 +183,6 @@ templates:
       Your template content here with {variable1} and {variable2}
     description: "Template description"  # Optional
     system_message: "System prompt for the LLM"  # Optional
-    required_variables: ["variable1", "variable2"]  # Optional
 ```
 
 Required fields:
@@ -193,7 +192,6 @@ Optional fields:
 - `name`: Template identifier (auto-generated if using dictionary)
 - `description`: Brief description of the template's purpose
 - `system_message`: System prompt for the LLM
-- `required_variables`: List of required variable names
 
 ## 📚 Documentation
 
