@@ -20,8 +20,16 @@ class BaseProcessor(ABC):
         logger.debug(f"Initialized processor for model {model_config.name}")
     
     @abstractmethod
-    async def process_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
-        """Process a single item."""
+    async def process_item(self, item: Dict[str, Any], global_vars: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+        """Process a single item.
+        
+        Args:
+            item: The item to process
+            global_vars: Optional global variables to use during processing
+        
+        Returns:
+            Dict containing the processing result
+        """
         pass
     
     async def process_batch(self, 
@@ -30,15 +38,7 @@ class BaseProcessor(ABC):
                           progress_callback: Optional[Callable] = None,
                           max_retries: int = 5,
                           max_concurrent: Optional[int] = None) -> List[Dict[str, Any]]:
-        """Process a batch of items with automatic queue management and rate limiting.
-        
-        Args:
-            items: List of input items to process
-            global_vars: Optional global variables to pass to all items
-            progress_callback: Optional callback for progress updates
-            max_retries: Maximum number of retries for failed requests
-            max_concurrent: Maximum number of concurrent requests. If None, uses rate limit.
-        """
+        """Process a batch of items with automatic queue management and rate limiting."""
         if not items:
             return []
 
@@ -58,20 +58,24 @@ class BaseProcessor(ABC):
             retry_count = 0
             base_delay = 1.0
 
+            # Update in_progress counter when starting
+            if progress_callback:
+                progress_callback(in_progress_delta=1)
+
             while retry_count <= max_retries:
                 try:
                     async with semaphore:
                         result = await self.process_item(item, global_vars)
                         results[index] = result
                         if progress_callback:
-                            progress_callback(index=index, status="completed")
+                            # Decrease in_progress and increase completed
+                            progress_callback(completed_delta=1, in_progress_delta=-1)
                         return
                 except Exception as e:
                     retry_count += 1
                     if "429" in str(e):
                         # Record rate limit failure
                         rate_limiter.record_failure(is_429=True)
-                        # Use retry-after if provided, otherwise exponential backoff
                         delay = base_delay * (2 ** retry_count)
                         logger.warning(f"Rate limit hit, retry {retry_count}/{max_retries} in {delay}s")
                     else:
@@ -86,7 +90,8 @@ class BaseProcessor(ABC):
                         results[index] = {"error": str(e), "status": "failed"}
                         failed_indices.append(index)
                         if progress_callback:
-                            progress_callback(index=index, status="failed")
+                            # Decrease in_progress and increase failed
+                            progress_callback(failed_delta=1, in_progress_delta=-1)
 
         # Create and run tasks for all items
         tasks = [process_item_with_retry(i, item) for i, item in enumerate(items)]

@@ -35,13 +35,19 @@ class PerplexityClient(BaseClient):
             else:
                 messages = prompt
             
+            # Get timeout from kwargs or use default
+            timeout = kwargs.pop('timeout', 30.0)
+            
             # Merge parameters
             request_params = {
                 "model": model,
                 "messages": messages,
                 "stream": False
             }
-            request_params.update(kwargs)
+            # Add any remaining kwargs to request params
+            for key, value in kwargs.items():
+                if key not in ['system_message']:
+                    request_params[key] = value
             
             rate_limiter = self.get_rate_limiter(model)
             
@@ -52,11 +58,12 @@ class PerplexityClient(BaseClient):
                 
                 try:
                     async with httpx.AsyncClient() as client:
+                        logger.debug(f"Sending request to Perplexity API with timeout {timeout}s")
                         response = await client.post(
                             self.API_URL,
                             headers=self.headers,
                             json=request_params,
-                            timeout=30.0
+                            timeout=float(timeout)  # Ensure timeout is a float
                         )
                         
                         if response.status_code == 429:
@@ -65,8 +72,13 @@ class PerplexityClient(BaseClient):
                             raise Exception(f"Rate limit exceeded. Retry after {retry_after}s")
                             
                         response.raise_for_status()
+                        rate_limiter.record_success()  # Record successful call
                         return response.json()
                         
+                except httpx.TimeoutException as e:
+                    rate_limiter.record_failure()
+                    logger.warning(f"Request timeout after {timeout}s: {str(e)}")
+                    raise Exception(f"Request timed out after {timeout} seconds") from e
                 except httpx.HTTPStatusError as e:
                     if e.response.status_code == 429:
                         rate_limiter.record_failure(is_429=True)

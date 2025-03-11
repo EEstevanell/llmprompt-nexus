@@ -89,6 +89,14 @@ class RateLimiter:
                 effective_limit = max(1, int(self.max_calls * 0.8))  # Reduce by 20%
                 logger.debug(f"Reducing effective rate limit to {effective_limit} due to recent failures")
     
+    def record_success(self) -> None:
+        """Record a successful API call. 
+        The call is already recorded in self.calls when acquire() is called, 
+        but this method exists for API consistency and possible future extensions."""
+        # The call was already recorded in acquire(), nothing additional to do
+        # This method exists for API consistency with record_failure()
+        pass
+    
     def record_failure(self, is_429: bool = False) -> None:
         """Record a failed API call."""
         now = datetime.now()

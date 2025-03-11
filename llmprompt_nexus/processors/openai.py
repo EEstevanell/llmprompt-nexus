@@ -33,17 +33,26 @@ class OpenAIProcessor(BaseProcessor):
             return messages
         else:
             raise ValueError("Item must contain either 'prompt', 'messages', or use a template")
-            
-    async def process_item(self, item: Dict[str, Any]) -> Dict[str, Any]:
+
+    async def process_item(self, item: Dict[str, Any], global_vars: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Process a single item using OpenAI's API."""
         try:
+            # Merge global vars with item if provided
+            if global_vars:
+                item = {**global_vars, **item}  # Item values take precedence
+
             # Get prompt or messages from template or input
             prompt = self._prepare_prompt(item)
             model = self.model_config.name
             
-            # Pass through any additional parameters except those we handle
+            # Only pass through OpenAI-specific parameters
+            allowed_params = {
+                'temperature', 'top_p', 'n', 'stream', 'stop', 
+                'max_tokens', 'presence_penalty', 'frequency_penalty',
+                'logit_bias', 'user'
+            }
             kwargs = {k: v for k, v in item.items() 
-                     if k not in ('prompt', 'model', 'messages', 'system_message')}
+                     if k in allowed_params}
             
             # If prompt is a list of messages, pass directly
             if isinstance(prompt, list):
@@ -75,6 +84,14 @@ class OpenAIProcessor(BaseProcessor):
                 "error": str(e),
                 "model": self.model_config.name
             }
-    
-    # We're removing the custom process_batch implementation and will use
-    # the improved queue-based implementation from BaseProcessor instead
+
+    def _post_process_result(self, result: Dict[str, Any]) -> Dict[str, Any]:
+        """Post-process the API response."""
+        if isinstance(result, dict) and 'error' in result:
+            return result
+        
+        return {
+            'response': result.get('response', ''),
+            'model': self.model_config.name,
+            'usage': result.get('usage', {})
+        }

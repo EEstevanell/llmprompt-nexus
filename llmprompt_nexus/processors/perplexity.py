@@ -1,3 +1,4 @@
+import asyncio
 from typing import Dict, List, Any, Optional, Union
 from llmprompt_nexus.clients.base import BaseClient
 from llmprompt_nexus.models.model_config import ModelConfig
@@ -49,41 +50,50 @@ class PerplexityProcessor(BaseProcessor):
     async def process_item(self, item: Dict[str, Any], 
                          global_vars: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
         """Process a single translation item with retry handling."""
-        try:
-            # Merge global variables if provided
-            if global_vars:
-                context = {**item, **global_vars}
-            else:
-                context = item.copy()
+        retries = 0
+        max_retries = self._max_retries
+        while retries <= max_retries:
+            try:
+                # Merge global variables if provided
+                if global_vars:
+                    context = {**item, **global_vars}
+                else:
+                    context = item.copy()
 
-            # Get formatted messages
-            messages = self._prepare_prompt(context)
-            
-            # Generate with built-in retry
-            result = await self.client.generate(
-                prompt=messages,
-                model=self.model_config.name
-            )
-            
-            # Extract the translation from the response
-            if isinstance(result, dict) and 'choices' in result:
-                translation = result['choices'][0]['message']['content']
-            else:
-                translation = str(result)
-            
-            return {
-                'response': translation,
-                'status': 'completed',
-                'model': self.model_config.name
-            }
-            
-        except Exception as e:
-            logger.error(f"Error processing item: {str(e)}")
-            return {
-                'error': str(e),
-                'status': 'failed',
-                'model': self.model_config.name
-            }
+                # Get formatted messages
+                messages = self._prepare_prompt(context)
+                
+                # Generate with increased timeout
+                result = await self.client.generate(
+                    prompt=messages,
+                    model=self.model_config.name,
+                    timeout=30  # Increase timeout to 30 seconds
+                )
+                
+                # Extract the translation from the response
+                if isinstance(result, dict) and 'choices' in result:
+                    translation = result['choices'][0]['message']['content']
+                else:
+                    translation = str(result)
+                
+                return {
+                    'response': translation,
+                    'status': 'completed',
+                    'model': self.model_config.name
+                }
+                
+            except Exception as e:
+                retries += 1
+                if retries > max_retries:
+                    logger.error(f"Failed after {max_retries} retries: {str(e)}")
+                    return {
+                        'error': str(e),
+                        'status': 'failed',
+                        'model': self.model_config.name,
+                        'retries': retries
+                    }
+                logger.warning(f"Attempt {retries}/{max_retries} failed, retrying: {str(e)}")
+                await asyncio.sleep(2 ** retries)  # Exponential backoff
     
     async def process_batch(self, items: List[Dict[str, Any]], **kwargs) -> List[Dict[str, Any]]:
         """Process a batch of items with improved rate limit handling."""

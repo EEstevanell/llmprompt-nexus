@@ -35,7 +35,7 @@ class BatchProgressTracker:
             self.pbar = None
 
     def update(self, completed_delta: int = 0, failed_delta: int = 0, 
-               in_progress_delta: int = 0) -> None:
+               in_progress_delta: int = 0, **kwargs) -> None:
         """
         Update progress counters and trigger progress reporting.
         
@@ -43,6 +43,7 @@ class BatchProgressTracker:
             completed_delta: Number of newly completed items
             failed_delta: Number of newly failed items
             in_progress_delta: Change in number of in-progress items
+            **kwargs: Additional keyword arguments (ignored, for compatibility)
         """
         self.completed += completed_delta
         self.failed += failed_delta
