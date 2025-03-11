@@ -42,7 +42,7 @@ Please provide a clear, technical answer based on the context above.""",
         """,
         "question": "How does the rate limiter handle requests when the token bucket is empty?"
     }
-    result = await framework.run_with_model(
+    result = await framework.generate(
         input_data=qa_input,
         model_id="sonar",
         template_config=qa_template  # Use template configuration directly
@@ -71,7 +71,7 @@ Please provide a clear, technical answer based on the context above.""",
         "style": "academic",
         "max_length": 50
     }
-    result = await framework.run_with_model(
+    result = await framework.generate(
         input_data=summary_input,
         model_id="sonar",
         template_config=summary_template  # Use template configuration directly

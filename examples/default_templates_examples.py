@@ -19,9 +19,9 @@ async def translation_example(framework: NexusManager):
         "source_language": "English",
         "target_language": "Spanish"
     }
-    result = await framework.run_with_model(
+    result = await framework.generate(
         input_data=input_data,
-        model_id="sonar",
+        model_id="gpt-4o",
         template_name="translation"  # Will load from translation.yaml
     )
     logger.debug(f"Original: Hello world")
@@ -37,9 +37,9 @@ async def summarization_example(framework: NexusManager):
         dynamic type system and automatic memory management and supports multiple programming paradigms.
         """
     }
-    result = await framework.run_with_model(
+    result = await framework.generate(
         input_data=input_data,
-        model_id="sonar",
+        model_id="gpt-4o",
         template_name="summarization"  # Will load from summarization.yaml
     )
     logger.debug(f"Original text: {input_data['text']}")
@@ -52,9 +52,9 @@ async def classification_example(framework: NexusManager):
         "text": "I absolutely loved this product! Best purchase ever.",
         "categories": ["positive", "negative", "neutral"]
     }
-    result = await framework.run_with_model(
+    result = await framework.generate(
         input_data=input_data,
-        model_id="sonar",
+        model_id="gpt-4o",
         template_name="classification"  # Will load from classification.yaml
     )
     logger.debug(f"Text: {input_data['text']}")
@@ -71,9 +71,9 @@ async def qa_example(framework: NexusManager):
         """,
         "question": "What are the main features of the UnifiedLLM framework?"
     }
-    result = await framework.run_with_model(
+    result = await framework.generate(
         input_data=input_data,
-        model_id="sonar",
+        model_id="gpt-4o",
         template_name="qa"  # Will load from qa.yaml
     )
     logger.debug(f"Context: {input_data['context']}")
@@ -87,9 +87,9 @@ async def intent_example(framework: NexusManager):
         "text": "Can you help me book a flight to New York?",
         "possible_intents": ["booking", "information", "support", "other"]
     }
-    result = await framework.run_with_model(
+    result = await framework.generate(
         input_data=input_data,
-        model_id="sonar",
+        model_id="gpt-4o",
         template_name="intent"  # Will load from intent.yaml
     )
     logger.debug(f"Text: {input_data['text']}")

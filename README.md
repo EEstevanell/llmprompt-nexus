@@ -18,7 +18,7 @@ llm = NexusManager({
 })
 
 # Simple translation example
-result = await llm.run_with_model(
+result = await llm.generate(
     input_data={
         "text": "Hello world",
         "source_language": "English",
@@ -152,8 +152,8 @@ batch_inputs = [
     for text in texts
 ]
 
-results = await llm.run_batch_with_model(
-    input_data=batch_inputs,
+results = await llm.generate_batch(
+    inputs=batch_inputs,
     model_id="sonar-pro",
     template_name="translation"
 )
@@ -168,6 +168,8 @@ LLMPromptNexus comes with several built-in templates:
 - **Intent Detection**: Identify user intentions from text
 - **Question Answering**: Generate answers based on context
 - **Summarization**: Create concise text summaries
+
+For detailed instructions and examples on using templates, see our [Templates Guide](docs/TEMPLATES.md).
 
 ## ⚙️ Template Schema
 

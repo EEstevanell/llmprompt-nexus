@@ -188,7 +188,7 @@ async def demonstrate_file_processing():
     logger.info("\nStarting file processing...")
     
     try:
-        # Using the new simplified API with consistent parameter naming
+        # Process the file using process_file method
         output_path = await framework.process_file(
             file_path=file_path,
             model_id=model_id,
